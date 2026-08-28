@@ -46,3 +46,35 @@ def test_detection_engine_returns_document_order():
 
     assert findings[0]["type"] == "CARD_NUMBER"
     assert findings[1]["type"] == "EMAIL"
+
+
+
+def test_detection_engine_can_include_ner(monkeypatch):
+    def fake_detect_named_entities(text):
+        return [
+            {
+                "type": "PERSON",
+                "value": "Ayşe Yılmaz",
+                "start": 0,
+                "end": 11,
+                "confidence": 0.95,
+                "source": "ner_model",
+            }
+        ]
+
+    monkeypatch.setattr(
+        "backend.app.services.detection_engine.detect_named_entities",
+        fake_detect_named_entities,
+    )
+
+    findings = detect_sensitive_data(
+        text="Ayşe Yılmaz",
+        page_number=2,
+        include_ner=True,
+    )
+
+    assert len(findings) == 1
+    assert findings[0]["type"] == "PERSON"
+    assert findings[0]["value"] == "Ayşe Yılmaz"
+    assert findings[0]["page_number"] == 2
+    assert findings[0]["source"] == "ner_model"    

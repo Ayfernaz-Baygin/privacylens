@@ -6,12 +6,10 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from backend.app.services.detection_engine import detect_sensitive_data
-from backend.app.services.pdf_parser import extract_text_from_pdf
-from backend.app.services.pdf_locator import locate_text_in_pdf
-from backend.app.services.pdf_locator import locate_text_in_pdf
 from backend.app.services.pdf_highlighter import create_highlighted_pdf
+from backend.app.services.pdf_locator import locate_text_in_pdf
+from backend.app.services.pdf_parser import extract_text_from_pdf
 from backend.app.services.pdf_redactor import create_redacted_pdf
-
 
 
 router = APIRouter(
@@ -175,6 +173,7 @@ def analyze_document(document_id: str):
         page_findings = detect_sensitive_data(
             text=page["text"],
             page_number=page["page_number"],
+            include_ner=True,
         )
 
         for finding in page_findings:
@@ -195,6 +194,7 @@ def analyze_document(document_id: str):
         "finding_count": len(findings),
         "findings": findings,
     }
+
 
 @router.get("/{document_id}/highlight")
 def highlight_document(document_id: str):
@@ -229,6 +229,7 @@ def highlight_document(document_id: str):
         page_findings = detect_sensitive_data(
             text=page["text"],
             page_number=page["page_number"],
+            include_ner=True,
         )
 
         for finding in page_findings:
@@ -259,6 +260,8 @@ def highlight_document(document_id: str):
         media_type="application/pdf",
         filename=f"privacylens-highlighted-{document_id}.pdf",
     )
+
+
 @router.get("/{document_id}/redact")
 def redact_document(document_id: str):
     document_directory = UPLOAD_ROOT / document_id
@@ -292,6 +295,7 @@ def redact_document(document_id: str):
         page_findings = detect_sensitive_data(
             text=page["text"],
             page_number=page["page_number"],
+            include_ner=True,
         )
 
         for finding in page_findings:
