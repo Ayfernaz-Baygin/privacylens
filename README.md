@@ -1,35 +1,201 @@
 # PrivacyLens
 
-PrivacyLens is an AI-assisted document privacy platform that detects and redacts sensitive information from documents before they are shared.
+PrivacyLens is an AI-assisted document privacy platform that detects, reviews and securely redacts sensitive information from PDF, DOCX and XLSX documents. Detection combines rule-based validation (email, phone, national ID, IBAN, card numbers) with a Turkish named-entity recognition model (person, location, organization) — it is not a single "AI does everything" pipeline.
 
-## MVP
+## Why PrivacyLens?
 
-Supported document types:
+Finding and removing personal or sensitive data scattered across documents is tedious to do by hand and easy to get wrong — a missed email address or ID number in a "cleaned" file is a real leak. PrivacyLens provides a structured **detect → assess → review → redact** workflow so sensitive values are found consistently, given a confidence-backed privacy status, optionally reviewed by a human, and then permanently removed from the document rather than just visually hidden.
 
-- PDF
-- DOCX
-- XLSX
+## Features
 
-Sensitive information:
+- PDF, DOCX and XLSX upload
+- Rule-based detection:
+  - Email addresses
+  - Turkish mobile phone numbers
+  - Turkish National ID numbers (TCKN)
+  - Turkish IBAN numbers
+  - Payment card numbers, validated with the Luhn algorithm
+- Turkish named-entity recognition:
+  - PERSON
+  - LOCATION
+  - ORGANIZATION
+- Confidence scoring and confidence levels (HIGH / MEDIUM / LOW) per finding
+- Privacy status per finding (SENSITIVE / REVIEW)
+- AUTO_REDACT / REVIEW / KEEP redaction-decision layer
+- Human-in-the-loop selection of REVIEW findings before redaction
+- Selective, format-aware secure redaction
+- Protected document download after redaction
 
-- Email addresses
-- Phone numbers
-- Turkish National ID numbers
-- IBAN numbers
-- Payment card numbers
-- Person names
-- Addresses
+LOCATION is a named-entity label produced by the NER model (e.g. a city or place mentioned in text) — PrivacyLens does not have a dedicated postal-address detector.
 
-## Planned Architecture
+## Secure Redaction
 
-- React + TypeScript
-- Python + FastAPI
-- PostgreSQL
-- Rule-based detection
-- Named Entity Recognition
-- OCR
-- Document redaction
+Each format is redacted using its own structure rather than a single generic approach:
 
-## Development Status
+**PDF** — coordinate-based true redaction via PyMuPDF (`add_redact_annot` + `apply_redactions`): matched text regions are located on the page and their underlying content is removed, not just covered with a black box.
 
-🚧 In development
+**DOCX** — paragraphs and table cells are traversed in document order, sensitive spans are mapped back to the specific XML runs that contain them, and the original run text is replaced in place (length-preserving block characters), including cases where an entity spans multiple runs.
+
+**XLSX** — sheets and cells are mapped similarly; cell values are redacted directly. Formula cells cannot be safely edited at the offset level, so a matched formula cell is fail-safe replaced as a whole (formula removed, value blocked out) instead of partially rewritten.
+
+For DOCX and XLSX, tests additionally verify redaction against the raw XML/ZIP contents of the output file, not just what a re-opened document object shows, confirming the sensitive literal is actually gone from the underlying markup.
+
+## Architecture
+
+```mermaid
+flowchart TD
+    A[Frontend - React / Vite] --> B[FastAPI]
+    B --> C[Document Processing]
+    C --> D[Format Parser: PDF / DOCX / XLSX]
+    D --> E[Detection Engine - rules + Turkish NER]
+    E --> F[Confidence / Privacy Decision]
+    F --> G[Human Review]
+    G --> H[Format-specific Redactor: PDF / DOCX / XLSX]
+```
+
+## Detection Pipeline
+
+```
+Document
+  → text extraction (format-specific parser)
+  → rule detectors + Turkish NER
+  → confidence scoring
+  → privacy status (SENSITIVE / REVIEW)
+  → redaction action (AUTO_REDACT / REVIEW / KEEP)
+  → optional human review of REVIEW findings
+  → redaction
+```
+
+## Security / Privacy Protections
+
+- Server-generated UUID4 document IDs (client never supplies or influences an ID)
+- `document_id` validated before any filesystem path is built; malformed and unknown IDs return the same 404
+- 20 MB upload size limit
+- Upload extension and declared MIME type checked
+- Real content validation, not just metadata: PDF signature check; DOCX/XLSX are opened as ZIP archives and checked for the required internal parts
+- ZIP bomb / decompression-abuse guards on DOCX/XLSX uploads: total uncompressed size, per-entry uncompressed size, compression ratio, entry count, unsafe (traversal-style) entry paths, and encrypted entries are all checked before the archive is parsed
+- The document's working directory (source file and any generated output) is deleted right after a successful redaction response has been fully sent
+- Abandoned documents (uploaded but never redacted or explicitly deleted) are removed after a 1-hour retention window, swept by a periodic background cleanup task
+- No database — findings and documents are not persisted beyond the temporary working directory and its retention window
+
+Uploaded files are written to temporary server-side storage while they are being processed — they do not stay on disk indefinitely, but they do briefly touch disk; PrivacyLens does not process files purely in memory.
+
+## Supported Formats
+
+| Format | Analyze | Redact |
+|--------|---------|--------|
+| PDF    | Yes     | Yes    |
+| DOCX   | Yes     | Yes    |
+| XLSX   | Yes     | Yes    |
+
+## Known Limitations
+
+**PDF**
+- Scanned/image-only PDFs require OCR, which is not currently implemented — text must be extractable from the PDF itself
+- Form fields, annotations, and attachments may not be analyzed or redacted
+
+**DOCX** — currently reliable scope:
+- Body paragraphs
+- Table cells
+
+Not currently covered: headers/footers, text boxes, comments, footnotes/endnotes, tracked changes, embedded objects.
+
+**XLSX** — currently reliable scope:
+- Worksheet cells
+
+Not currently covered: comments, headers/footers, text boxes/drawings, charts, external links, defined names, pivot caches, embedded/OLE objects.
+
+**General** — authentication and multi-user authorization are not implemented. This repository should currently be treated as a local/single-user portfolio and demo application, not a public multi-tenant production service.
+
+## Tech Stack
+
+**Backend**
+- Python
+- FastAPI
+- PyMuPDF
+- python-docx
+- openpyxl
+- transformers / PyTorch (Turkish NER)
+- pytest
+
+**Frontend**
+- React
+- Vite
+- JavaScript
+- CSS
+
+## Running Locally
+
+**Backend**
+
+```
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r backend/requirements.txt
+uvicorn backend.app.main:app --reload
+```
+
+**Frontend**
+
+```
+cd frontend
+npm install
+npm run dev
+```
+
+## Tests
+
+**Backend**
+
+```
+python -m pytest
+```
+
+204 automated tests currently pass.
+
+**Frontend**
+
+```
+cd frontend
+npm run build
+```
+
+## Example Workflow
+
+1. Upload a PDF, DOCX, or XLSX document
+2. Analyze it for sensitive data
+3. Review the findings and their privacy status
+4. Select any REVIEW findings to include, if needed
+5. Create the redacted document
+6. Download the protected document
+7. The backend removes the document's working directory once the download response has fully completed
+
+## Project Structure
+
+```
+backend/
+  app/
+    routes/        API routes (documents.py)
+    services/       parsing, detection wiring, redaction, cleanup, file validation
+    detectors/      rule-based detectors (email, phone, TCKN, IBAN, card)
+  tests/            pytest suite
+  evaluation/        NER evaluation scripts and sample data
+frontend/
+  src/              React application (JSX)
+```
+
+## Roadmap
+
+The following are not implemented yet:
+
+- OCR for scanned/image-only PDFs
+- Broader DOCX/XLSX structure coverage (headers/footers, comments, text boxes, etc.)
+- Authentication / authorization
+- Containerization
+- CI pipeline
+- Optional persistent metadata/database
+- Richer NER evaluation and model monitoring
+
+## Disclaimer / Scope
+
+PrivacyLens assists with identifying and redacting sensitive data but does not guarantee detection of every sensitive value in a document, and its output should not be presented as automatic legal or regulatory compliance certification. Review redacted documents before relying on them.
