@@ -6,6 +6,7 @@ from backend.app.detectors.tckn_detector import detect_tckn
 
 from backend.app.services.confidence import enrich_finding_confidence
 from backend.app.services.privacy_policy import enrich_privacy_status
+from backend.app.services.redaction_decision import enrich_redaction_action
 from backend.app.services.turkish_ner import detect_named_entities
 
 
@@ -54,6 +55,11 @@ def detect_sensitive_data(
 
     findings = [
         enrich_privacy_status(finding)
+        for finding in findings
+    ]
+
+    findings = [
+        enrich_redaction_action(finding)
         for finding in findings
     ]
 

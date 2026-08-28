@@ -10,7 +10,7 @@ from backend.app.services.pdf_highlighter import create_highlighted_pdf
 from backend.app.services.pdf_locator import locate_text_in_pdf
 from backend.app.services.pdf_parser import extract_text_from_pdf
 from backend.app.services.pdf_redactor import create_redacted_pdf
-from backend.app.services.privacy_policy import filter_auto_redact_findings
+from backend.app.services.redaction_decision import filter_auto_redact_findings
 
 
 router = APIRouter(

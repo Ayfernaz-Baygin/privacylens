@@ -88,3 +88,16 @@ def test_detection_engine_adds_privacy_status():
     assert len(findings) == 1
     assert findings[0]["type"] == "EMAIL"
     assert findings[0]["privacy_status"] == "SENSITIVE"
+
+def test_detection_engine_adds_redaction_action():
+    findings = detect_sensitive_data(
+        text="İletişim: test@example.com",
+        page_number=1,
+    )
+
+    assert len(findings) == 1
+    assert findings[0]["type"] == "EMAIL"
+    assert (
+        findings[0]["redaction_action"]
+        == "AUTO_REDACT"
+    )    
