@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from backend.app.services.detection_engine import detect_sensitive_data
 from backend.app.services.docx_parser import extract_text_from_docx
+from backend.app.services.docx_redactor import create_redacted_docx
 from backend.app.services.pdf_highlighter import create_highlighted_pdf
 from backend.app.services.pdf_locator import locate_text_in_pdf
 from backend.app.services.pdf_parser import extract_text_from_pdf
@@ -572,9 +573,9 @@ def redact_selected_document(
         / "source.pdf"
     )
 
-    redacted_path = (
+    docx_path = (
         document_directory
-        / "redacted-selected.pdf"
+        / "source.docx"
     )
 
     if not document_directory.exists():
@@ -583,28 +584,51 @@ def redact_selected_document(
             detail="Belge bulunamadı.",
         )
 
-    if not pdf_path.exists():
+    if pdf_path.exists():
+        is_docx = False
+
+        try:
+            parsed_document = (
+                extract_text_from_pdf(
+                    pdf_path
+                )
+            )
+
+        except Exception:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "PDF dosyası "
+                    "analiz edilemedi."
+                ),
+            )
+
+    elif docx_path.exists():
+        is_docx = True
+
+        try:
+            parsed_document = (
+                extract_text_from_docx(
+                    docx_path
+                )
+            )
+
+        except Exception:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "DOCX dosyası "
+                    "analiz edilemedi."
+                ),
+            )
+
+    else:
         raise HTTPException(
             status_code=415,
             detail=(
                 "Redaction işlemi yalnızca "
-                "PDF dosyalarını destekliyor."
-            ),
-        )
-
-    try:
-        parsed_document = (
-            extract_text_from_pdf(
-                pdf_path
-            )
-        )
-
-    except Exception:
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "PDF dosyası "
-                "analiz edilemedi."
+                "PDF ve DOCX dosyalarını "
+                "destekliyor."
             ),
         )
 
@@ -618,15 +642,18 @@ def redact_selected_document(
         )
 
         for finding in page_findings:
-            finding["bounding_boxes"] = (
-                locate_text_in_pdf(
-                    file_path=pdf_path,
-                    page_number=page[
-                        "page_number"
-                    ],
-                    value=finding["value"],
+            if is_docx:
+                finding["bounding_boxes"] = []
+            else:
+                finding["bounding_boxes"] = (
+                    locate_text_in_pdf(
+                        file_path=pdf_path,
+                        page_number=page[
+                            "page_number"
+                        ],
+                        value=finding["value"],
+                    )
                 )
-            )
 
             finding["finding_id"] = (
                 build_finding_id(
@@ -655,6 +682,36 @@ def redact_selected_document(
                 "bulunamadı."
             ),
         )
+
+    if is_docx:
+        redacted_path = (
+            document_directory
+            / "redacted-selected.docx"
+        )
+
+        create_redacted_docx(
+            source_path=docx_path,
+            output_path=redacted_path,
+            findings=selected_findings,
+        )
+
+        return FileResponse(
+            path=redacted_path,
+            media_type=(
+                "application/vnd.openxmlformats"
+                "-officedocument.wordprocessingml"
+                ".document"
+            ),
+            filename=(
+                "privacylens-redacted-"
+                f"{document_id}.docx"
+            ),
+        )
+
+    redacted_path = (
+        document_directory
+        / "redacted-selected.pdf"
+    )
 
     create_redacted_pdf(
         source_path=pdf_path,
