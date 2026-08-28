@@ -1,0 +1,144 @@
+[
+  {
+    "text": "Ayşe Yılmaz İstanbul'da yaşıyor.",
+    "entities": [
+      {
+        "type": "PERSON",
+        "value": "Ayşe Yılmaz"
+      },
+      {
+        "type": "LOCATION",
+        "value": "İstanbul"
+      }
+    ]
+  },
+  {
+    "text": "Mehmet Kaya ABC Teknoloji şirketinde çalışıyor.",
+    "entities": [
+      {
+        "type": "PERSON",
+        "value": "Mehmet Kaya"
+      },
+      {
+        "type": "ORGANIZATION",
+        "value": "ABC Teknoloji"
+      }
+    ]
+  },
+  {
+    "text": "Zeynep Demir geçen hafta Ankara'ya gitti.",
+    "entities": [
+      {
+        "type": "PERSON",
+        "value": "Zeynep Demir"
+      },
+      {
+        "type": "LOCATION",
+        "value": "Ankara"
+      }
+    ]
+  },
+  {
+    "text": "Ahmet Yıldız İzmir'deki Ege Yazılım ofisini ziyaret etti.",
+    "entities": [
+      {
+        "type": "PERSON",
+        "value": "Ahmet Yıldız"
+      },
+      {
+        "type": "LOCATION",
+        "value": "İzmir"
+      },
+      {
+        "type": "ORGANIZATION",
+        "value": "Ege Yazılım"
+      }
+    ]
+  },
+  {
+    "text": "Selin Arslan Bursa'da yaşıyor ve Nova Teknoloji'de çalışıyor.",
+    "entities": [
+      {
+        "type": "PERSON",
+        "value": "Selin Arslan"
+      },
+      {
+        "type": "LOCATION",
+        "value": "Bursa"
+      },
+      {
+        "type": "ORGANIZATION",
+        "value": "Nova Teknoloji"
+      }
+    ]
+  },
+  {
+    "text": "Murat Çelik bugün Antalya'dan döndü.",
+    "entities": [
+      {
+        "type": "PERSON",
+        "value": "Murat Çelik"
+      },
+      {
+        "type": "LOCATION",
+        "value": "Antalya"
+      }
+    ]
+  },
+  {
+    "text": "Elif Şahin İstanbul Üniversitesi mezunudur.",
+    "entities": [
+      {
+        "type": "PERSON",
+        "value": "Elif Şahin"
+      },
+      {
+        "type": "ORGANIZATION",
+        "value": "İstanbul Üniversitesi"
+      }
+    ]
+  },
+  {
+    "text": "Can Öztürk TeknoSoft bünyesinde görev yapıyor.",
+    "entities": [
+      {
+        "type": "PERSON",
+        "value": "Can Öztürk"
+      },
+      {
+        "type": "ORGANIZATION",
+        "value": "TeknoSoft"
+      }
+    ]
+  },
+  {
+    "text": "Deniz Acar Eskişehir'de düzenlenen toplantıya katıldı.",
+    "entities": [
+      {
+        "type": "PERSON",
+        "value": "Deniz Acar"
+      },
+      {
+        "type": "LOCATION",
+        "value": "Eskişehir"
+      }
+    ]
+  },
+  {
+    "text": "Burak Koç Microsoft Türkiye ekibiyle İstanbul'da görüştü.",
+    "entities": [
+      {
+        "type": "PERSON",
+        "value": "Burak Koç"
+      },
+      {
+        "type": "ORGANIZATION",
+        "value": "Microsoft Türkiye"
+      },
+      {
+        "type": "LOCATION",
+        "value": "İstanbul"
+      }
+    ]
+  }
+]
