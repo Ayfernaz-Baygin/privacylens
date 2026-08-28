@@ -46,6 +46,26 @@ def test_extract_text_from_docx_reads_table_cells(tmp_path):
     assert "Ayfer | Aycan" in page["text"]
 
 
+def test_extract_text_from_docx_preserves_document_order(tmp_path):
+    docx_path = tmp_path / "sample-order.docx"
+
+    document = docx.Document()
+    document.add_paragraph("Before")
+
+    table = document.add_table(rows=1, cols=1)
+    table.cell(0, 0).text = "Middle"
+
+    document.add_paragraph("After")
+    document.save(docx_path)
+
+    result = extract_text_from_docx(docx_path)
+
+    page = result["pages"][0]
+    lines = page["text"].split("\n")
+
+    assert lines == ["Before", "Middle", "After"]
+
+
 def test_extract_text_from_docx_skips_empty_paragraphs(tmp_path):
     docx_path = tmp_path / "sample-empty.docx"
 
