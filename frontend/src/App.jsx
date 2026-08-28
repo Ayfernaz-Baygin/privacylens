@@ -354,15 +354,15 @@ function App() {
             </h2>
 
             <p>
-              Select a PDF or DOCX file
-              to scan for personal and
-              sensitive information.
+              Select a PDF, DOCX or XLSX
+              file to scan for personal
+              and sensitive information.
             </p>
 
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf,.docx"
+              accept=".pdf,.docx,.xlsx"
               hidden
               onChange={
                 handleFileChange
@@ -386,6 +386,10 @@ function App() {
                     selectedFile.name
                   ) === ".docx"
                     ? "DOCX"
+                    : getFileExtension(
+                        selectedFile.name
+                      ) === ".xlsx"
+                    ? "XLSX"
                     : "PDF"}
                 </div>
 
