@@ -17,6 +17,21 @@ def cell_to_text(value) -> str:
     return str(value)
 
 
+def iter_included_row_cells(row):
+    """Yields (cell, text) for the non-empty cells of a row, in order.
+
+    This is the single place that decides which cells count as "empty"
+    (skipped) vs. included in a row's " | "-joined text. xlsx_locator
+    reuses it so its cell index can never disagree with the text the
+    detector actually sees.
+    """
+    for cell in row:
+        text = cell_to_text(cell.value)
+
+        if text != "":
+            yield cell, text
+
+
 def extract_text_from_xlsx(file_path: Path) -> dict:
     """Reads a workbook sheet by sheet, row by row, in file order.
 
@@ -48,11 +63,9 @@ def extract_text_from_xlsx(file_path: Path) -> dict:
             for row in sheet.iter_rows():
                 cell_texts = [
                     text
-                    for text in (
-                        cell_to_text(cell.value)
-                        for cell in row
+                    for _, text in iter_included_row_cells(
+                        row
                     )
-                    if text != ""
                 ]
 
                 if cell_texts:
