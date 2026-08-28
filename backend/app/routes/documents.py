@@ -1,11 +1,15 @@
 from pathlib import Path
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, Response, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
+from starlette.background import BackgroundTask
 
 from backend.app.services.detection_engine import detect_sensitive_data
+from backend.app.services.document_cleanup import (
+    delete_document_directory,
+)
 from backend.app.services.document_processing import (
     DocumentParseError,
     UnsupportedDocumentFormatError,
@@ -211,6 +215,42 @@ async def upload_document(
         "size_bytes": len(content),
         "status": "uploaded",
     }
+
+
+def _cleanup_background_task(
+    document_id: str,
+) -> BackgroundTask:
+    return BackgroundTask(
+        delete_document_directory,
+        UPLOAD_ROOT,
+        document_id,
+    )
+
+
+@router.delete(
+    "/{document_id}",
+    status_code=204,
+)
+def delete_document(
+    document_id: str,
+):
+    validate_document_id(document_id)
+
+    document_directory = (
+        UPLOAD_ROOT / document_id
+    )
+
+    if not document_directory.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="Belge bulunamadı.",
+        )
+
+    delete_document_directory(
+        UPLOAD_ROOT, document_id
+    )
+
+    return Response(status_code=204)
 
 
 @router.get("/{document_id}/text")
@@ -703,6 +743,9 @@ def redact_selected_document(
                 "privacylens-redacted-"
                 f"{document_id}.pdf"
             ),
+            background=_cleanup_background_task(
+                document_id
+            ),
         )
 
     if document_format == "docx":
@@ -728,6 +771,9 @@ def redact_selected_document(
                 "privacylens-redacted-"
                 f"{document_id}.docx"
             ),
+            background=_cleanup_background_task(
+                document_id
+            ),
         )
 
     if document_format == "xlsx":
@@ -752,6 +798,9 @@ def redact_selected_document(
             filename=(
                 "privacylens-redacted-"
                 f"{document_id}.xlsx"
+            ),
+            background=_cleanup_background_task(
+                document_id
             ),
         )
 
