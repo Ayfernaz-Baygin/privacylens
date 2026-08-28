@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environment
+.venv/
+venv/
+
+# Environment
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+uploads/
+
+# Logs
+*.log
+
+# Dataset files
+datasets/*.csv
+datasets/*.xlsx
+datasets/*.json
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.next/
