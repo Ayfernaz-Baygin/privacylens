@@ -2,6 +2,20 @@ import { useRef, useState } from "react";
 
 const API_BASE_URL = "http://127.0.0.1:8000";
 
+const getFileExtension = (fileName) => {
+  if (!fileName) {
+    return "";
+  }
+
+  const lastDotIndex = fileName.lastIndexOf(".");
+
+  if (lastDotIndex === -1) {
+    return "";
+  }
+
+  return fileName.slice(lastDotIndex).toLowerCase();
+};
+
 function App() {
   const fileInputRef = useRef(null);
 
@@ -136,7 +150,7 @@ function App() {
     });
   };
 
-  const handleCreateRedactedPdf = async () => {
+  const handleCreateRedactedDocument = async () => {
     if (
       !uploadedDocument ||
       isRedacting
@@ -189,8 +203,13 @@ function App() {
 
       link.href = url;
 
+      const extension =
+        getFileExtension(
+          selectedFile?.name
+        ) || ".pdf";
+
       link.download =
-        `privacylens-redacted-${uploadedDocument.id}.pdf`;
+        `privacylens-redacted-${uploadedDocument.id}${extension}`;
 
       window.document.body.appendChild(
         link
@@ -335,15 +354,15 @@ function App() {
             </h2>
 
             <p>
-              Select a PDF to scan for
-              personal and sensitive
-              information.
+              Select a PDF or DOCX file
+              to scan for personal and
+              sensitive information.
             </p>
 
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf"
+              accept=".pdf,.docx"
               hidden
               onChange={
                 handleFileChange
@@ -357,13 +376,17 @@ function App() {
               }
               disabled={isAnalyzing}
             >
-              Choose PDF
+              Choose Document
             </button>
 
             {selectedFile && (
               <div className="selected-file">
                 <div className="file-icon">
-                  PDF
+                  {getFileExtension(
+                    selectedFile.name
+                  ) === ".docx"
+                    ? "DOCX"
+                    : "PDF"}
                 </div>
 
                 <div>
@@ -770,15 +793,15 @@ function App() {
               <button
                 className="primary-button"
                 onClick={
-                  handleCreateRedactedPdf
+                  handleCreateRedactedDocument
                 }
                 disabled={
                   isRedacting
                 }
               >
                 {isRedacting
-                  ? "Creating PDF..."
-                  : "Create Redacted PDF"}
+                  ? "Creating Document..."
+                  : "Create Redacted Document"}
               </button>
             </div>
 
@@ -790,7 +813,7 @@ function App() {
 
                 <div>
                   <strong>
-                    Protected PDF
+                    Protected document
                     created successfully
                   </strong>
 
