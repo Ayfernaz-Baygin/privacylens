@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
 
+from backend.app.config import get_upload_root
 from backend.app.services.detection_engine import detect_sensitive_data
 from backend.app.services.document_cleanup import (
     delete_document_directory,
@@ -71,7 +72,7 @@ DOCUMENT_FORMAT_LABELS = {
 
 MAX_FILE_SIZE = 20 * 1024 * 1024
 
-UPLOAD_ROOT = Path("tmp/privacylens")
+UPLOAD_ROOT = get_upload_root()
 
 UPLOAD_ROOT.mkdir(
     parents=True,

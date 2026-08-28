@@ -143,6 +143,16 @@ npm install
 npm run dev
 ```
 
+### Configuration (optional)
+
+All configuration is optional; unset environment variables keep the exact defaults above, so the commands work with no setup.
+
+- `VITE_API_BASE_URL` (frontend, e.g. in `frontend/.env`) — backend URL the app calls. Default: `http://127.0.0.1:8000`.
+- `PRIVACYLENS_UPLOAD_ROOT` (backend) — directory documents are stored in while being processed. Default: `tmp/privacylens`.
+- `PRIVACYLENS_CORS_ORIGINS` (backend) — comma-separated allowed CORS origins. Default: `http://localhost:5173,http://127.0.0.1:5173`.
+
+See `frontend/.env.example` and `backend/.env.example` for reference (non-secret) values.
+
 ## Tests
 
 **Backend**
