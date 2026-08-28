@@ -4,13 +4,34 @@ import shutil
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
 
 from backend.app.services.detection_engine import detect_sensitive_data
 from backend.app.services.pdf_highlighter import create_highlighted_pdf
 from backend.app.services.pdf_locator import locate_text_in_pdf
 from backend.app.services.pdf_parser import extract_text_from_pdf
 from backend.app.services.pdf_redactor import create_redacted_pdf
-from backend.app.services.redaction_decision import filter_auto_redact_findings
+from backend.app.services.redaction_decision import (
+    filter_auto_redact_findings,
+    select_redaction_findings,
+)
+
+
+
+def build_finding_id(
+    finding: dict,
+) -> str:
+    return (
+        f"{finding['page_number']}:"
+        f"{finding['start']}:"
+        f"{finding['end']}:"
+        f"{finding['type']}"
+    )
+
+class RedactionSelectionRequest(BaseModel):
+    selected_finding_ids: list[str] = Field(
+        default_factory=list
+    )
 
 
 router = APIRouter(
@@ -34,6 +55,7 @@ ALLOWED_CONTENT_TYPES = {
 MAX_FILE_SIZE = 20 * 1024 * 1024
 
 UPLOAD_ROOT = Path("tmp/privacylens")
+
 UPLOAD_ROOT.mkdir(
     parents=True,
     exist_ok=True,
@@ -229,32 +251,28 @@ def analyze_document(
     findings = []
 
     for page in parsed_document["pages"]:
-        page_findings = (
-            detect_sensitive_data(
-                text=page["text"],
-                page_number=page[
-                    "page_number"
-                ],
-                include_ner=True,
-            )
+        page_findings = detect_sensitive_data(
+            text=page["text"],
+            page_number=page["page_number"],
+            include_ner=True,
         )
 
         for finding in page_findings:
-            bounding_boxes = (
-                locate_text_in_pdf(
-                    file_path=pdf_path,
-                    page_number=page[
-                        "page_number"
-                    ],
-                    value=finding[
-                        "value"
-                    ],
-                )
+            bounding_boxes = locate_text_in_pdf(
+                file_path=pdf_path,
+                page_number=page["page_number"],
+                value=finding["value"],
             )
 
-            finding[
-                "bounding_boxes"
-            ] = bounding_boxes
+            finding["bounding_boxes"] = (
+                bounding_boxes
+            )
+
+            finding["finding_id"] = (
+                build_finding_id(
+                    finding
+                )
+            )
 
         findings.extend(
             page_findings
@@ -325,32 +343,28 @@ def highlight_document(
     findings = []
 
     for page in parsed_document["pages"]:
-        page_findings = (
-            detect_sensitive_data(
-                text=page["text"],
-                page_number=page[
-                    "page_number"
-                ],
-                include_ner=True,
-            )
+        page_findings = detect_sensitive_data(
+            text=page["text"],
+            page_number=page["page_number"],
+            include_ner=True,
         )
 
         for finding in page_findings:
-            bounding_boxes = (
-                locate_text_in_pdf(
-                    file_path=pdf_path,
-                    page_number=page[
-                        "page_number"
-                    ],
-                    value=finding[
-                        "value"
-                    ],
-                )
+            bounding_boxes = locate_text_in_pdf(
+                file_path=pdf_path,
+                page_number=page["page_number"],
+                value=finding["value"],
             )
 
-            finding[
-                "bounding_boxes"
-            ] = bounding_boxes
+            finding["bounding_boxes"] = (
+                bounding_boxes
+            )
+
+            finding["finding_id"] = (
+                build_finding_id(
+                    finding
+                )
+            )
 
         findings.extend(
             page_findings
@@ -433,44 +447,40 @@ def redact_document(
     findings = []
 
     for page in parsed_document["pages"]:
-        page_findings = (
-            detect_sensitive_data(
-                text=page["text"],
-                page_number=page[
-                    "page_number"
-                ],
-                include_ner=True,
-            )
+        page_findings = detect_sensitive_data(
+            text=page["text"],
+            page_number=page["page_number"],
+            include_ner=True,
         )
 
         for finding in page_findings:
-            bounding_boxes = (
-                locate_text_in_pdf(
-                    file_path=pdf_path,
-                    page_number=page[
-                        "page_number"
-                    ],
-                    value=finding[
-                        "value"
-                    ],
-                )
+            bounding_boxes = locate_text_in_pdf(
+                file_path=pdf_path,
+                page_number=page["page_number"],
+                value=finding["value"],
             )
 
-            finding[
-                "bounding_boxes"
-            ] = bounding_boxes
+            finding["bounding_boxes"] = (
+                bounding_boxes
+            )
+
+            finding["finding_id"] = (
+                build_finding_id(
+                    finding
+                )
+            )
 
         findings.extend(
             page_findings
         )
 
-    sensitive_findings = (
+    auto_redact_findings = (
         filter_auto_redact_findings(
             findings
         )
     )
 
-    if not sensitive_findings:
+    if not auto_redact_findings:
         raise HTTPException(
             status_code=404,
             detail=(
@@ -482,7 +492,123 @@ def redact_document(
     create_redacted_pdf(
         source_path=pdf_path,
         output_path=redacted_path,
-        findings=sensitive_findings,
+        findings=auto_redact_findings,
+    )
+
+    return FileResponse(
+        path=redacted_path,
+        media_type="application/pdf",
+        filename=(
+            "privacylens-redacted-"
+            f"{document_id}.pdf"
+        ),
+    )
+
+
+@router.post(
+    "/{document_id}/redact-selected"
+)
+def redact_selected_document(
+    document_id: str,
+    request: RedactionSelectionRequest,
+):
+    document_directory = (
+        UPLOAD_ROOT / document_id
+    )
+
+    pdf_path = (
+        document_directory
+        / "source.pdf"
+    )
+
+    redacted_path = (
+        document_directory
+        / "redacted-selected.pdf"
+    )
+
+    if not document_directory.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="Belge bulunamadı.",
+        )
+
+    if not pdf_path.exists():
+        raise HTTPException(
+            status_code=415,
+            detail=(
+                "Redaction işlemi yalnızca "
+                "PDF dosyalarını destekliyor."
+            ),
+        )
+
+    try:
+        parsed_document = (
+            extract_text_from_pdf(
+                pdf_path
+            )
+        )
+
+    except Exception:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "PDF dosyası "
+                "analiz edilemedi."
+            ),
+        )
+
+    findings = []
+
+    for page in parsed_document["pages"]:
+        page_findings = detect_sensitive_data(
+            text=page["text"],
+            page_number=page["page_number"],
+            include_ner=True,
+        )
+
+        for finding in page_findings:
+            finding["bounding_boxes"] = (
+                locate_text_in_pdf(
+                    file_path=pdf_path,
+                    page_number=page[
+                        "page_number"
+                    ],
+                    value=finding["value"],
+                )
+            )
+
+            finding["finding_id"] = (
+                build_finding_id(
+                    finding
+                )
+            )
+
+        findings.extend(
+            page_findings
+        )
+
+    selected_findings = (
+        select_redaction_findings(
+            findings=findings,
+            selected_finding_ids=(
+                request.selected_finding_ids
+            ),
+        )
+    )
+
+    if not selected_findings:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Maskelenecek veri "
+                "bulunamadı."
+            ),
+        )
+
+    create_redacted_pdf(
+        source_path=pdf_path,
+        output_path=redacted_path,
+        findings=selected_findings,
     )
 
     return FileResponse(

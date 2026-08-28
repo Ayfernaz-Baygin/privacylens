@@ -56,3 +56,26 @@ def filter_auto_redact_findings(
         if finding.get("redaction_action")
         == "AUTO_REDACT"
     ]
+
+def select_redaction_findings(
+    findings: list[dict],
+    selected_finding_ids: list[str],
+) -> list[dict]:
+    selected_ids = set(
+        selected_finding_ids
+    )
+
+    return [
+        finding
+        for finding in findings
+        if (
+            finding.get("redaction_action")
+            == "AUTO_REDACT"
+        )
+        or (
+            finding.get("redaction_action")
+            == "REVIEW"
+            and finding.get("finding_id")
+            in selected_ids
+        )
+    ]
