@@ -6,8 +6,10 @@ function App() {
   const fileInputRef = useRef(null);
 
   const [selectedFile, setSelectedFile] = useState(null);
+
   const [uploadedDocument, setUploadedDocument] =
     useState(null);
+
   const [analysis, setAnalysis] = useState(null);
 
   const [selectedReviewIds, setSelectedReviewIds] =
@@ -17,6 +19,12 @@ function App() {
     useState(false);
 
   const [isRedacting, setIsRedacting] =
+    useState(false);
+
+  const [analysisStage, setAnalysisStage] =
+    useState("");
+
+  const [redactionSuccess, setRedactionSuccess] =
     useState(false);
 
   const [error, setError] = useState("");
@@ -32,6 +40,8 @@ function App() {
     setUploadedDocument(null);
     setAnalysis(null);
     setSelectedReviewIds([]);
+    setRedactionSuccess(false);
+    setAnalysisStage("");
     setError("");
   };
 
@@ -45,6 +55,8 @@ function App() {
     }
 
     setIsAnalyzing(true);
+    setAnalysisStage("uploading");
+    setRedactionSuccess(false);
     setError("");
     setUploadedDocument(null);
     setAnalysis(null);
@@ -81,6 +93,8 @@ function App() {
 
       setUploadedDocument(uploadedData);
 
+      setAnalysisStage("analyzing");
+
       const analyzeResponse = await fetch(
         `${API_BASE_URL}/api/documents/${uploadedData.id}/analyze`
       );
@@ -103,6 +117,7 @@ function App() {
       setError(error.message);
     } finally {
       setIsAnalyzing(false);
+      setAnalysisStage("");
     }
   };
 
@@ -122,11 +137,15 @@ function App() {
   };
 
   const handleCreateRedactedPdf = async () => {
-    if (!uploadedDocument || isRedacting) {
+    if (
+      !uploadedDocument ||
+      isRedacting
+    ) {
       return;
     }
 
     setIsRedacting(true);
+    setRedactionSuccess(false);
     setError("");
 
     try {
@@ -135,7 +154,8 @@ function App() {
         {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type":
+              "application/json",
           },
           body: JSON.stringify({
             selected_finding_ids:
@@ -154,13 +174,18 @@ function App() {
         );
       }
 
-      const blob = await response.blob();
+      const blob =
+        await response.blob();
 
       const url =
-        window.URL.createObjectURL(blob);
+        window.URL.createObjectURL(
+          blob
+        );
 
       const link =
-        window.document.createElement("a");
+        window.document.createElement(
+          "a"
+        );
 
       link.href = url;
 
@@ -175,6 +200,8 @@ function App() {
       link.remove();
 
       window.URL.revokeObjectURL(url);
+
+      setRedactionSuccess(true);
     } catch (error) {
       setError(error.message);
     } finally {
@@ -182,41 +209,70 @@ function App() {
     }
   };
 
-  const formatConfidence = (confidence) => {
+  const handleAnalyzeAnother = () => {
+    setSelectedFile(null);
+    setUploadedDocument(null);
+    setAnalysis(null);
+    setSelectedReviewIds([]);
+    setRedactionSuccess(false);
+    setAnalysisStage("");
+    setError("");
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  };
+
+  const formatConfidence = (
+    confidence
+  ) => {
     return `${Math.round(
       confidence * 100
     )}%`;
   };
+
   const autoRedactCount =
-  analysis?.findings.filter(
-    (finding) =>
-      finding.redaction_action ===
-      "AUTO_REDACT"
-  ).length || 0;
+    analysis?.findings.filter(
+      (finding) =>
+        finding.redaction_action ===
+        "AUTO_REDACT"
+    ).length || 0;
 
-const reviewFindings =
-  analysis?.findings.filter(
-    (finding) =>
-      finding.redaction_action === "REVIEW"
-  ) || [];
+  const reviewFindings =
+    analysis?.findings.filter(
+      (finding) =>
+        finding.redaction_action ===
+        "REVIEW"
+    ) || [];
 
-const reviewCount =
-  reviewFindings.length;
+  const reviewCount =
+    reviewFindings.length;
 
-const selectedReviewCount =
-  selectedReviewIds.length;
+  const selectedReviewCount =
+    selectedReviewIds.length;
 
-const handleSelectAllReview = () => {
-  const reviewIds = reviewFindings
-    .map((finding) => finding.finding_id)
-    .filter(Boolean);
+  const handleSelectAllReview = () => {
+    const reviewIds =
+      reviewFindings
+        .map(
+          (finding) =>
+            finding.finding_id
+        )
+        .filter(Boolean);
 
-  setSelectedReviewIds(reviewIds);
-};
+    setSelectedReviewIds(
+      reviewIds
+    );
+  };
 
-const handleClearReview = () => {
-  setSelectedReviewIds([]);
-};
+  const handleClearReview = () => {
+    setSelectedReviewIds([]);
+  };
 
   return (
     <div className="app">
@@ -246,7 +302,8 @@ const handleClearReview = () => {
       <main className="main">
         <section className="hero">
           <div className="eyebrow">
-            PRIVACY-AWARE DOCUMENT ANALYSIS
+            PRIVACY-AWARE DOCUMENT
+            ANALYSIS
           </div>
 
           <h1>
@@ -259,10 +316,11 @@ const handleClearReview = () => {
           </h1>
 
           <p>
-            PrivacyLens detects sensitive
-            information in documents using
-            rule-based validation and Turkish
-            AI entity recognition.
+            PrivacyLens detects
+            sensitive information in
+            documents using rule-based
+            validation and Turkish AI
+            entity recognition.
           </p>
         </section>
 
@@ -287,12 +345,17 @@ const handleClearReview = () => {
               type="file"
               accept=".pdf"
               hidden
-              onChange={handleFileChange}
+              onChange={
+                handleFileChange
+              }
             />
 
             <button
               className="primary-button"
-              onClick={handleChooseFile}
+              onClick={
+                handleChooseFile
+              }
+              disabled={isAnalyzing}
             >
               Choose PDF
             </button>
@@ -305,7 +368,9 @@ const handleClearReview = () => {
 
                 <div>
                   <strong>
-                    {selectedFile.name}
+                    {
+                      selectedFile.name
+                    }
                   </strong>
 
                   <span>
@@ -322,13 +387,39 @@ const handleClearReview = () => {
             {selectedFile && (
               <button
                 className="primary-button upload-button"
-                onClick={handleAnalyze}
-                disabled={isAnalyzing}
+                onClick={
+                  handleAnalyze
+                }
+                disabled={
+                  isAnalyzing
+                }
               >
                 {isAnalyzing
                   ? "Analyzing..."
                   : "Analyze Document"}
               </button>
+            )}
+
+            {isAnalyzing && (
+              <div className="analysis-progress">
+                <div className="progress-spinner" />
+
+                <div>
+                  <strong>
+                    {analysisStage ===
+                    "uploading"
+                      ? "Uploading document..."
+                      : "Analyzing sensitive data..."}
+                  </strong>
+
+                  <span>
+                    {analysisStage ===
+                    "uploading"
+                      ? "Preparing your document for analysis."
+                      : "Running rule engine, Turkish NER and privacy decisions."}
+                  </span>
+                </div>
+              </div>
             )}
 
             {error && (
@@ -338,9 +429,11 @@ const handleClearReview = () => {
             )}
 
             {uploadedDocument &&
-              !isAnalyzing && (
+              !isAnalyzing &&
+              analysis && (
                 <div className="success-message">
-                  Document uploaded successfully.
+                  Analysis completed
+                  successfully.
                 </div>
               )}
 
@@ -399,8 +492,8 @@ const handleClearReview = () => {
 
                   <p>
                     Auto-redact or send
-                    uncertain findings for
-                    review
+                    uncertain findings
+                    for review
                   </p>
                 </div>
               </div>
@@ -412,9 +505,9 @@ const handleClearReview = () => {
               </span>
 
               <p>
-                Documents are prepared for
-                privacy-aware review before
-                redaction.
+                Documents are prepared
+                for privacy-aware review
+                before redaction.
               </p>
             </div>
           </div>
@@ -429,84 +522,117 @@ const handleClearReview = () => {
                 </div>
 
                 <h2>
-                  {analysis.finding_count}{" "}
+                  {
+                    analysis.finding_count
+                  }{" "}
                   findings detected
                 </h2>
               </div>
 
               <div className="page-count">
-                {analysis.page_count} page
+                {
+                  analysis.page_count
+                }{" "}
+                page
               </div>
             </div>
 
+            <div className="analysis-summary">
+              <div className="summary-item">
+                <span>
+                  Total Findings
+                </span>
 
- <div className="analysis-summary">
-  <div className="summary-item">
-    <span>Total Findings</span>
-    <strong>
-      {analysis.finding_count}
-    </strong>
-  </div>
+                <strong>
+                  {
+                    analysis.finding_count
+                  }
+                </strong>
+              </div>
 
-  <div className="summary-item auto-summary">
-    <span>Auto Redact</span>
-    <strong>
-      {autoRedactCount}
-    </strong>
-  </div>
+              <div className="summary-item auto-summary">
+                <span>
+                  Auto Redact
+                </span>
 
-  <div className="summary-item review-summary">
-    <span>Needs Review</span>
-    <strong>
-      {reviewCount}
-    </strong>
-  </div>
+                <strong>
+                  {autoRedactCount}
+                </strong>
+              </div>
 
-  <div className="summary-item">
-    <span>Review Selected</span>
-    <strong>
-      {selectedReviewCount}
-    </strong>
-  </div>
-</div>      
+              <div className="summary-item review-summary">
+                <span>
+                  Needs Review
+                </span>
 
-{reviewCount > 0 && (
-  <div className="review-toolbar">
-    <div>
-      <strong>
-        Review uncertain findings
-      </strong>
+                <strong>
+                  {reviewCount}
+                </strong>
+              </div>
 
-      <span>
-        Select additional data that should
-        be removed from the document.
-      </span>
-    </div>
+              <div className="summary-item">
+                <span>
+                  Review Selected
+                </span>
 
-    <div className="review-toolbar-actions">
-      <button
-        className="secondary-button"
-        onClick={handleSelectAllReview}
-      >
-        Select All Review
-      </button>
+                <strong>
+                  {selectedReviewCount}
+                </strong>
+              </div>
+            </div>
 
-      <button
-        className="secondary-button"
-        onClick={handleClearReview}
-        disabled={
-          selectedReviewIds.length === 0
-        }
-      >
-        Clear Selection
-      </button>
-    </div>
-  </div>
-)}
+            {reviewCount > 0 && (
+              <div className="review-toolbar">
+                <div>
+                  <strong>
+                    Review uncertain
+                    findings
+                  </strong>
+
+                  <span>
+                    Select additional
+                    data that should be
+                    removed from the
+                    document.
+                  </span>
+                </div>
+
+                <div className="review-toolbar-actions">
+                  <button
+                    className="secondary-button"
+                    onClick={
+                      handleSelectAllReview
+                    }
+                    disabled={
+                      selectedReviewCount ===
+                      reviewCount
+                    }
+                  >
+                    Select All Review
+                  </button>
+
+                  <button
+                    className="secondary-button"
+                    onClick={
+                      handleClearReview
+                    }
+                    disabled={
+                      selectedReviewIds.length ===
+                      0
+                    }
+                  >
+                    Clear Selection
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="findings-grid">
               {analysis.findings.map(
-                (finding, index) => (
+                (
+                  finding,
+                  index
+                ) => (
                   <div
                     className="finding-card"
                     key={
@@ -516,7 +642,9 @@ const handleClearReview = () => {
                   >
                     <div className="finding-top">
                       <span className="finding-type">
-                        {finding.type}
+                        {
+                          finding.type
+                        }
                       </span>
 
                       <span
@@ -534,7 +662,9 @@ const handleClearReview = () => {
                     </div>
 
                     <div className="finding-value">
-                      {finding.value}
+                      {
+                        finding.value
+                      }
                     </div>
 
                     {finding.redaction_action ===
@@ -553,7 +683,8 @@ const handleClearReview = () => {
                         />
 
                         <span>
-                          Include in redaction
+                          Include in
+                          redaction
                         </span>
                       </label>
                     )}
@@ -561,7 +692,8 @@ const handleClearReview = () => {
                     {finding.redaction_action ===
                       "AUTO_REDACT" && (
                       <div className="auto-control">
-                        ✓ Included automatically
+                        ✓ Included
+                        automatically
                       </div>
                     )}
 
@@ -608,7 +740,9 @@ const handleClearReview = () => {
                         </span>
 
                         <strong>
-                          {finding.source}
+                          {
+                            finding.source
+                          }
                         </strong>
                       </div>
                     </div>
@@ -620,15 +754,16 @@ const handleClearReview = () => {
             <div className="redaction-actions">
               <div>
                 <strong>
-                  Ready to create protected
-                  document
+                  Ready to create
+                  protected document
                 </strong>
 
                 <p>
-                  Automatic findings will
-                  always be redacted. Review
-                  findings are included only
-                  when selected.
+                  Automatic findings
+                  will always be
+                  redacted. Review
+                  findings are included
+                  only when selected.
                 </p>
               </div>
 
@@ -637,13 +772,46 @@ const handleClearReview = () => {
                 onClick={
                   handleCreateRedactedPdf
                 }
-                disabled={isRedacting}
+                disabled={
+                  isRedacting
+                }
               >
                 {isRedacting
                   ? "Creating PDF..."
                   : "Create Redacted PDF"}
               </button>
             </div>
+
+            {redactionSuccess && (
+              <div className="redaction-success">
+                <div className="success-icon">
+                  ✓
+                </div>
+
+                <div>
+                  <strong>
+                    Protected PDF
+                    created successfully
+                  </strong>
+
+                  <span>
+                    Your redacted
+                    document has been
+                    downloaded.
+                  </span>
+                </div>
+
+                <button
+                  className="secondary-button"
+                  onClick={
+                    handleAnalyzeAnother
+                  }
+                >
+                  Analyze Another
+                  Document
+                </button>
+              </div>
+            )}
           </section>
         )}
       </main>

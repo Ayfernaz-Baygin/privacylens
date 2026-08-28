@@ -647,3 +647,67 @@ button {
     flex-direction: column;
   }
 }
+.redaction-success {
+  margin-top: 16px;
+  padding: 18px 20px;
+
+  display: flex;
+  align-items: center;
+  gap: 16px;
+
+  border: 1px solid rgba(94, 234, 212, 0.18);
+  border-radius: 14px;
+
+  background: rgba(94, 234, 212, 0.05);
+}
+
+.success-icon {
+  width: 38px;
+  height: 38px;
+
+  display: grid;
+  place-items: center;
+
+  flex-shrink: 0;
+
+  border-radius: 50%;
+
+  background: #5eead4;
+  color: #071018;
+
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.redaction-success > div:nth-child(2) {
+  flex: 1;
+}
+
+.redaction-success strong {
+  display: block;
+
+  margin-bottom: 5px;
+
+  color: #e8edf5;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.redaction-success span {
+  display: block;
+
+  color: #718091;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.redaction-success .secondary-button {
+  flex-shrink: 0;
+}
+
+@media (max-width: 800px) {
+  .redaction-success {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
