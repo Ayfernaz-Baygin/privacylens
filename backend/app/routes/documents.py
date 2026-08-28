@@ -7,6 +7,12 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from backend.app.services.detection_engine import detect_sensitive_data
+from backend.app.services.document_processing import (
+    DocumentParseError,
+    UnsupportedDocumentFormatError,
+    analyze_document_file,
+    build_finding_id,
+)
 from backend.app.services.docx_parser import extract_text_from_docx
 from backend.app.services.docx_redactor import create_redacted_docx
 from backend.app.services.pdf_highlighter import create_highlighted_pdf
@@ -18,17 +24,6 @@ from backend.app.services.redaction_decision import (
     select_redaction_findings,
 )
 
-
-
-def build_finding_id(
-    finding: dict,
-) -> str:
-    return (
-        f"{finding['page_number']}:"
-        f"{finding['start']}:"
-        f"{finding['end']}:"
-        f"{finding['type']}"
-    )
 
 class RedactionSelectionRequest(BaseModel):
     selected_finding_ids: list[str] = Field(
@@ -251,45 +246,13 @@ def analyze_document(
             detail="Belge bulunamadı.",
         )
 
-    if pdf_path.exists():
-        is_docx = False
+    try:
+        analysis = analyze_document_file(
+            pdf_path=pdf_path,
+            docx_path=docx_path,
+        )
 
-        try:
-            parsed_document = (
-                extract_text_from_pdf(
-                    pdf_path
-                )
-            )
-
-        except Exception:
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    "PDF dosyası "
-                    "analiz edilemedi."
-                ),
-            )
-
-    elif docx_path.exists():
-        is_docx = True
-
-        try:
-            parsed_document = (
-                extract_text_from_docx(
-                    docx_path
-                )
-            )
-
-        except Exception:
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    "DOCX dosyası "
-                    "analiz edilemedi."
-                ),
-            )
-
-    else:
+    except UnsupportedDocumentFormatError:
         raise HTTPException(
             status_code=415,
             detail=(
@@ -299,47 +262,31 @@ def analyze_document(
             ),
         )
 
-    findings = []
-
-    for page in parsed_document["pages"]:
-        page_findings = detect_sensitive_data(
-            text=page["text"],
-            page_number=page["page_number"],
-            include_ner=True,
+    except DocumentParseError as error:
+        format_label = (
+            "PDF"
+            if error.document_format == "pdf"
+            else "DOCX"
         )
 
-        for finding in page_findings:
-            if is_docx:
-                finding["bounding_boxes"] = []
-            else:
-                finding["bounding_boxes"] = (
-                    locate_text_in_pdf(
-                        file_path=pdf_path,
-                        page_number=page["page_number"],
-                        value=finding["value"],
-                    )
-                )
-
-            finding["finding_id"] = (
-                build_finding_id(
-                    finding
-                )
-            )
-
-        findings.extend(
-            page_findings
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"{format_label} dosyası "
+                "analiz edilemedi."
+            ),
         )
 
     return {
         "id": document_id,
         "status": "analyzed",
-        "page_count": parsed_document[
+        "page_count": analysis[
             "page_count"
         ],
         "finding_count": len(
-            findings
+            analysis["findings"]
         ),
-        "findings": findings,
+        "findings": analysis["findings"],
     }
 
 
@@ -584,45 +531,13 @@ def redact_selected_document(
             detail="Belge bulunamadı.",
         )
 
-    if pdf_path.exists():
-        is_docx = False
+    try:
+        analysis = analyze_document_file(
+            pdf_path=pdf_path,
+            docx_path=docx_path,
+        )
 
-        try:
-            parsed_document = (
-                extract_text_from_pdf(
-                    pdf_path
-                )
-            )
-
-        except Exception:
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    "PDF dosyası "
-                    "analiz edilemedi."
-                ),
-            )
-
-    elif docx_path.exists():
-        is_docx = True
-
-        try:
-            parsed_document = (
-                extract_text_from_docx(
-                    docx_path
-                )
-            )
-
-        except Exception:
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    "DOCX dosyası "
-                    "analiz edilemedi."
-                ),
-            )
-
-    else:
+    except UnsupportedDocumentFormatError:
         raise HTTPException(
             status_code=415,
             detail=(
@@ -632,42 +547,26 @@ def redact_selected_document(
             ),
         )
 
-    findings = []
-
-    for page in parsed_document["pages"]:
-        page_findings = detect_sensitive_data(
-            text=page["text"],
-            page_number=page["page_number"],
-            include_ner=True,
+    except DocumentParseError as error:
+        format_label = (
+            "PDF"
+            if error.document_format == "pdf"
+            else "DOCX"
         )
 
-        for finding in page_findings:
-            if is_docx:
-                finding["bounding_boxes"] = []
-            else:
-                finding["bounding_boxes"] = (
-                    locate_text_in_pdf(
-                        file_path=pdf_path,
-                        page_number=page[
-                            "page_number"
-                        ],
-                        value=finding["value"],
-                    )
-                )
-
-            finding["finding_id"] = (
-                build_finding_id(
-                    finding
-                )
-            )
-
-        findings.extend(
-            page_findings
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"{format_label} dosyası "
+                "analiz edilemedi."
+            ),
         )
+
+    is_docx = analysis["is_docx"]
 
     selected_findings = (
         select_redaction_findings(
-            findings=findings,
+            findings=analysis["findings"],
             selected_finding_ids=(
                 request.selected_finding_ids
             ),
