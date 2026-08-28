@@ -3,10 +3,13 @@ from uuid import uuid4
 import shutil
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 
 from backend.app.services.detection_engine import detect_sensitive_data
 from backend.app.services.pdf_parser import extract_text_from_pdf
 from backend.app.services.pdf_locator import locate_text_in_pdf
+from backend.app.services.pdf_locator import locate_text_in_pdf
+from backend.app.services.pdf_highlighter import create_highlighted_pdf
 
 
 
@@ -172,14 +175,15 @@ def analyze_document(document_id: str):
             text=page["text"],
             page_number=page["page_number"],
         )
+
         for finding in page_findings:
             bounding_boxes = locate_text_in_pdf(
-                 file_path=pdf_path,
-                 page_number=page["page_number"],
-                 value=finding["value"],
-        )
+                file_path=pdf_path,
+                page_number=page["page_number"],
+                value=finding["value"],
+            )
 
-        finding["bounding_boxes"] = bounding_boxes
+            finding["bounding_boxes"] = bounding_boxes
 
         findings.extend(page_findings)
 
@@ -190,3 +194,67 @@ def analyze_document(document_id: str):
         "finding_count": len(findings),
         "findings": findings,
     }
+
+@router.get("/{document_id}/highlight")
+def highlight_document(document_id: str):
+    document_directory = UPLOAD_ROOT / document_id
+    pdf_path = document_directory / "source.pdf"
+    highlighted_path = document_directory / "highlighted.pdf"
+
+    if not document_directory.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="Belge bulunamadı.",
+        )
+
+    if not pdf_path.exists():
+        raise HTTPException(
+            status_code=415,
+            detail="Highlight işlemi yalnızca PDF dosyalarını destekliyor.",
+        )
+
+    try:
+        parsed_document = extract_text_from_pdf(pdf_path)
+
+    except Exception:
+        raise HTTPException(
+            status_code=422,
+            detail="PDF dosyası analiz edilemedi.",
+        )
+
+    findings = []
+
+    for page in parsed_document["pages"]:
+        page_findings = detect_sensitive_data(
+            text=page["text"],
+            page_number=page["page_number"],
+        )
+
+        for finding in page_findings:
+            bounding_boxes = locate_text_in_pdf(
+                file_path=pdf_path,
+                page_number=page["page_number"],
+                value=finding["value"],
+            )
+
+            finding["bounding_boxes"] = bounding_boxes
+
+        findings.extend(page_findings)
+
+    if not findings:
+        raise HTTPException(
+            status_code=404,
+            detail="Highlight edilecek hassas veri bulunamadı.",
+        )
+
+    create_highlighted_pdf(
+        source_path=pdf_path,
+        output_path=highlighted_path,
+        findings=findings,
+    )
+
+    return FileResponse(
+        path=highlighted_path,
+        media_type="application/pdf",
+        filename=f"privacylens-highlighted-{document_id}.pdf",
+    )
