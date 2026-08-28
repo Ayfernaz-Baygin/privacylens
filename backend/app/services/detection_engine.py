@@ -3,6 +3,7 @@ from backend.app.detectors.email_detector import detect_emails
 from backend.app.detectors.iban_detector import detect_ibans
 from backend.app.detectors.phone_detector import detect_phone_numbers
 from backend.app.detectors.tckn_detector import detect_tckn
+from backend.app.services.confidence import enrich_finding_confidence
 from backend.app.services.turkish_ner import detect_named_entities
 
 
@@ -43,6 +44,11 @@ def detect_sensitive_data(
                 finding["page_number"] = page_number
 
             findings.append(finding)
+
+    findings = [
+        enrich_finding_confidence(finding)
+        for finding in findings
+    ]
 
     findings.sort(
         key=lambda finding: finding["start"]
