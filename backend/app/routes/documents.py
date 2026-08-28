@@ -24,6 +24,7 @@ from backend.app.services.redaction_decision import (
     select_redaction_findings,
 )
 from backend.app.services.xlsx_parser import extract_text_from_xlsx
+from backend.app.services.xlsx_redactor import create_redacted_xlsx
 
 
 class RedactionSelectionRequest(BaseModel):
@@ -579,8 +580,8 @@ def redact_selected_document(
             status_code=415,
             detail=(
                 "Redaction işlemi yalnızca "
-                "PDF ve DOCX dosyalarını "
-                "destekliyor."
+                "PDF, DOCX ve XLSX "
+                "dosyalarını destekliyor."
             ),
         )
 
@@ -601,18 +602,6 @@ def redact_selected_document(
         "document_format"
     ]
 
-    if document_format == "xlsx":
-        raise HTTPException(
-            status_code=415,
-            detail=(
-                "Redaction işlemi XLSX "
-                "dosyaları için henüz "
-                "desteklenmiyor."
-            ),
-        )
-
-    is_docx = document_format == "docx"
-
     selected_findings = (
         select_redaction_findings(
             findings=analysis["findings"],
@@ -631,7 +620,28 @@ def redact_selected_document(
             ),
         )
 
-    if is_docx:
+    if document_format == "pdf":
+        redacted_path = (
+            document_directory
+            / "redacted-selected.pdf"
+        )
+
+        create_redacted_pdf(
+            source_path=pdf_path,
+            output_path=redacted_path,
+            findings=selected_findings,
+        )
+
+        return FileResponse(
+            path=redacted_path,
+            media_type="application/pdf",
+            filename=(
+                "privacylens-redacted-"
+                f"{document_id}.pdf"
+            ),
+        )
+
+    if document_format == "docx":
         redacted_path = (
             document_directory
             / "redacted-selected.docx"
@@ -656,22 +666,35 @@ def redact_selected_document(
             ),
         )
 
-    redacted_path = (
-        document_directory
-        / "redacted-selected.pdf"
-    )
+    if document_format == "xlsx":
+        redacted_path = (
+            document_directory
+            / "redacted-selected.xlsx"
+        )
 
-    create_redacted_pdf(
-        source_path=pdf_path,
-        output_path=redacted_path,
-        findings=selected_findings,
-    )
+        create_redacted_xlsx(
+            source_path=xlsx_path,
+            output_path=redacted_path,
+            findings=selected_findings,
+        )
 
-    return FileResponse(
-        path=redacted_path,
-        media_type="application/pdf",
-        filename=(
-            "privacylens-redacted-"
-            f"{document_id}.pdf"
+        return FileResponse(
+            path=redacted_path,
+            media_type=(
+                "application/vnd.openxmlformats"
+                "-officedocument.spreadsheetml"
+                ".sheet"
+            ),
+            filename=(
+                "privacylens-redacted-"
+                f"{document_id}.xlsx"
+            ),
+        )
+
+    raise HTTPException(
+        status_code=500,
+        detail=(
+            "Bilinmeyen belge formatı: "
+            f"{document_format}"
         ),
     )

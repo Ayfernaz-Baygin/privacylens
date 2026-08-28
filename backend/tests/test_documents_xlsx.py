@@ -198,9 +198,7 @@ def test_analyze_xlsx_without_findings_returns_empty_list(monkeypatch):
     assert body["findings"] == []
 
 
-def test_redact_selected_rejects_xlsx_without_touching_pdf_flow(
-    monkeypatch,
-):
+def test_redact_selected_xlsx_is_supported(monkeypatch):
     _no_ner(monkeypatch)
 
     client = TestClient(app)
@@ -216,5 +214,12 @@ def test_redact_selected_rejects_xlsx_without_touching_pdf_flow(
         json={"selected_finding_ids": []},
     )
 
-    assert response.status_code == 415
-    assert "XLSX" in response.json()["detail"]
+    assert response.status_code == 200
+    assert response.headers["content-type"] == XLSX_CONTENT_TYPE
+
+    redacted = openpyxl.load_workbook(
+        io.BytesIO(response.content)
+    )
+
+    assert "test@example.com" not in redacted.active["A1"].value
+    assert "█" in redacted.active["A1"].value
