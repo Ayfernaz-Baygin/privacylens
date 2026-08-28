@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from backend.app.services.detection_engine import detect_sensitive_data
+from backend.app.services.docx_parser import extract_text_from_docx
 from backend.app.services.pdf_highlighter import create_highlighted_pdf
 from backend.app.services.pdf_locator import locate_text_in_pdf
 from backend.app.services.pdf_parser import extract_text_from_pdf
@@ -167,33 +168,54 @@ def get_document_text(
         / "source.pdf"
     )
 
+    docx_path = (
+        document_directory
+        / "source.docx"
+    )
+
     if not document_directory.exists():
         raise HTTPException(
             status_code=404,
             detail="Belge bulunamadı.",
         )
 
-    if not pdf_path.exists():
+    if pdf_path.exists():
+        try:
+            result = extract_text_from_pdf(
+                pdf_path
+            )
+
+        except Exception:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "PDF dosyası okunamadı "
+                    "veya geçerli bir PDF değil."
+                ),
+            )
+
+    elif docx_path.exists():
+        try:
+            result = extract_text_from_docx(
+                docx_path
+            )
+
+        except Exception:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "DOCX dosyası okunamadı "
+                    "veya geçerli bir DOCX değil."
+                ),
+            )
+
+    else:
         raise HTTPException(
             status_code=415,
             detail=(
                 "Bu aşamada metin çıkarma "
-                "yalnızca PDF dosyalarını "
-                "destekliyor."
-            ),
-        )
-
-    try:
-        result = extract_text_from_pdf(
-            pdf_path
-        )
-
-    except Exception:
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "PDF dosyası okunamadı "
-                "veya geçerli bir PDF değil."
+                "yalnızca PDF ve DOCX "
+                "dosyalarını destekliyor."
             ),
         )
 
@@ -217,34 +239,62 @@ def analyze_document(
         / "source.pdf"
     )
 
+    docx_path = (
+        document_directory
+        / "source.docx"
+    )
+
     if not document_directory.exists():
         raise HTTPException(
             status_code=404,
             detail="Belge bulunamadı.",
         )
 
-    if not pdf_path.exists():
+    if pdf_path.exists():
+        is_docx = False
+
+        try:
+            parsed_document = (
+                extract_text_from_pdf(
+                    pdf_path
+                )
+            )
+
+        except Exception:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "PDF dosyası "
+                    "analiz edilemedi."
+                ),
+            )
+
+    elif docx_path.exists():
+        is_docx = True
+
+        try:
+            parsed_document = (
+                extract_text_from_docx(
+                    docx_path
+                )
+            )
+
+        except Exception:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "DOCX dosyası "
+                    "analiz edilemedi."
+                ),
+            )
+
+    else:
         raise HTTPException(
             status_code=415,
             detail=(
                 "Bu aşamada analiz yalnızca "
-                "PDF dosyalarını destekliyor."
-            ),
-        )
-
-    try:
-        parsed_document = (
-            extract_text_from_pdf(
-                pdf_path
-            )
-        )
-
-    except Exception:
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "PDF dosyası "
-                "analiz edilemedi."
+                "PDF ve DOCX dosyalarını "
+                "destekliyor."
             ),
         )
 
@@ -258,15 +308,16 @@ def analyze_document(
         )
 
         for finding in page_findings:
-            bounding_boxes = locate_text_in_pdf(
-                file_path=pdf_path,
-                page_number=page["page_number"],
-                value=finding["value"],
-            )
-
-            finding["bounding_boxes"] = (
-                bounding_boxes
-            )
+            if is_docx:
+                finding["bounding_boxes"] = []
+            else:
+                finding["bounding_boxes"] = (
+                    locate_text_in_pdf(
+                        file_path=pdf_path,
+                        page_number=page["page_number"],
+                        value=finding["value"],
+                    )
+                )
 
             finding["finding_id"] = (
                 build_finding_id(
