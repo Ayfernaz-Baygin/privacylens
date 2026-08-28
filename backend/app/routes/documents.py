@@ -23,6 +23,7 @@ from backend.app.services.redaction_decision import (
     filter_auto_redact_findings,
     select_redaction_findings,
 )
+from backend.app.services.xlsx_parser import extract_text_from_xlsx
 
 
 class RedactionSelectionRequest(BaseModel):
@@ -47,6 +48,12 @@ ALLOWED_CONTENT_TYPES = {
     "application/pdf",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
+
+DOCUMENT_FORMAT_LABELS = {
+    "pdf": "PDF",
+    "docx": "DOCX",
+    "xlsx": "XLSX",
 }
 
 MAX_FILE_SIZE = 20 * 1024 * 1024
@@ -169,6 +176,11 @@ def get_document_text(
         / "source.docx"
     )
 
+    xlsx_path = (
+        document_directory
+        / "source.xlsx"
+    )
+
     if not document_directory.exists():
         raise HTTPException(
             status_code=404,
@@ -205,12 +217,27 @@ def get_document_text(
                 ),
             )
 
+    elif xlsx_path.exists():
+        try:
+            result = extract_text_from_xlsx(
+                xlsx_path
+            )
+
+        except Exception:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "XLSX dosyası okunamadı "
+                    "veya geçerli bir XLSX değil."
+                ),
+            )
+
     else:
         raise HTTPException(
             status_code=415,
             detail=(
                 "Bu aşamada metin çıkarma "
-                "yalnızca PDF ve DOCX "
+                "yalnızca PDF, DOCX ve XLSX "
                 "dosyalarını destekliyor."
             ),
         )
@@ -240,6 +267,11 @@ def analyze_document(
         / "source.docx"
     )
 
+    xlsx_path = (
+        document_directory
+        / "source.xlsx"
+    )
+
     if not document_directory.exists():
         raise HTTPException(
             status_code=404,
@@ -250,6 +282,7 @@ def analyze_document(
         analysis = analyze_document_file(
             pdf_path=pdf_path,
             docx_path=docx_path,
+            xlsx_path=xlsx_path,
         )
 
     except UnsupportedDocumentFormatError:
@@ -257,17 +290,15 @@ def analyze_document(
             status_code=415,
             detail=(
                 "Bu aşamada analiz yalnızca "
-                "PDF ve DOCX dosyalarını "
-                "destekliyor."
+                "PDF, DOCX ve XLSX "
+                "dosyalarını destekliyor."
             ),
         )
 
     except DocumentParseError as error:
-        format_label = (
-            "PDF"
-            if error.document_format == "pdf"
-            else "DOCX"
-        )
+        format_label = DOCUMENT_FORMAT_LABELS[
+            error.document_format
+        ]
 
         raise HTTPException(
             status_code=422,
@@ -525,6 +556,11 @@ def redact_selected_document(
         / "source.docx"
     )
 
+    xlsx_path = (
+        document_directory
+        / "source.xlsx"
+    )
+
     if not document_directory.exists():
         raise HTTPException(
             status_code=404,
@@ -535,6 +571,7 @@ def redact_selected_document(
         analysis = analyze_document_file(
             pdf_path=pdf_path,
             docx_path=docx_path,
+            xlsx_path=xlsx_path,
         )
 
     except UnsupportedDocumentFormatError:
@@ -548,11 +585,9 @@ def redact_selected_document(
         )
 
     except DocumentParseError as error:
-        format_label = (
-            "PDF"
-            if error.document_format == "pdf"
-            else "DOCX"
-        )
+        format_label = DOCUMENT_FORMAT_LABELS[
+            error.document_format
+        ]
 
         raise HTTPException(
             status_code=422,
@@ -562,9 +597,21 @@ def redact_selected_document(
             ),
         )
 
-    is_docx = (
-        analysis["document_format"] == "docx"
-    )
+    document_format = analysis[
+        "document_format"
+    ]
+
+    if document_format == "xlsx":
+        raise HTTPException(
+            status_code=415,
+            detail=(
+                "Redaction işlemi XLSX "
+                "dosyaları için henüz "
+                "desteklenmiyor."
+            ),
+        )
+
+    is_docx = document_format == "docx"
 
     selected_findings = (
         select_redaction_findings(

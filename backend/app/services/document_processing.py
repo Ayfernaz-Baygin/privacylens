@@ -4,10 +4,11 @@ from backend.app.services.detection_engine import detect_sensitive_data
 from backend.app.services.docx_parser import extract_text_from_docx
 from backend.app.services.pdf_locator import locate_text_in_pdf
 from backend.app.services.pdf_parser import extract_text_from_pdf
+from backend.app.services.xlsx_parser import extract_text_from_xlsx
 
 
 class UnsupportedDocumentFormatError(Exception):
-    """Neither a PDF nor a DOCX source was found."""
+    """No PDF, DOCX, or XLSX source was found."""
 
 
 class DocumentParseError(Exception):
@@ -30,15 +31,21 @@ def build_finding_id(finding: dict) -> str:
 def analyze_document_file(
     pdf_path: Path,
     docx_path: Path,
+    xlsx_path: Path,
 ) -> dict:
-    """Parses whichever of pdf_path/docx_path exists and returns
-    document_format ("pdf"/"docx") plus findings with bounding_boxes and
-    finding_id already attached.
+    """Parses whichever of pdf_path/docx_path/xlsx_path exists and
+    returns document_format ("pdf"/"docx"/"xlsx") plus findings with
+    bounding_boxes and finding_id already attached.
 
-    PDF findings get real bounding_boxes via locate_text_in_pdf; DOCX has
-    no page/coordinate concept yet, so its findings get bounding_boxes=[].
-    Raises UnsupportedDocumentFormatError if neither file exists, and
-    DocumentParseError (carrying "pdf"/"docx") if the parser fails.
+    PDF findings get real bounding_boxes via locate_text_in_pdf; DOCX and
+    XLSX have no page/coordinate concept yet, so their findings get
+    bounding_boxes=[]. For XLSX, each sheet is treated as one "page" (the
+    parser already numbers page_number by sheet order and sets
+    page_count to the sheet count), so detection and finding_id run per
+    sheet exactly like they run per PDF page.
+    Raises UnsupportedDocumentFormatError if none of the files exist,
+    and DocumentParseError (carrying "pdf"/"docx"/"xlsx") if the parser
+    fails.
     """
     if pdf_path.exists():
         document_format = "pdf"
@@ -55,6 +62,14 @@ def analyze_document_file(
             parsed_document = extract_text_from_docx(docx_path)
         except Exception as error:
             raise DocumentParseError("docx") from error
+
+    elif xlsx_path.exists():
+        document_format = "xlsx"
+
+        try:
+            parsed_document = extract_text_from_xlsx(xlsx_path)
+        except Exception as error:
+            raise DocumentParseError("xlsx") from error
 
     else:
         raise UnsupportedDocumentFormatError()
