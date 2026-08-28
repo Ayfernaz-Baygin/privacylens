@@ -1,5 +1,5 @@
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 import shutil
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
@@ -65,6 +65,30 @@ UPLOAD_ROOT.mkdir(
     parents=True,
     exist_ok=True,
 )
+
+
+def validate_document_id(document_id: str) -> None:
+    """Rejects anything that isn't a canonical UUID4 string.
+
+    Called before any path is built from document_id, so a malformed or
+    path-traversal-shaped value (e.g. "..", "../../etc", "not-a-uuid")
+    never reaches the filesystem. Invalid and merely-not-found document
+    ids are intentionally indistinguishable from the outside, so both
+    cases return 404.
+    """
+    try:
+        parsed = UUID(document_id)
+    except (ValueError, AttributeError, TypeError):
+        raise HTTPException(
+            status_code=404,
+            detail="Belge bulunamadı.",
+        )
+
+    if parsed.version != 4 or str(parsed) != document_id:
+        raise HTTPException(
+            status_code=404,
+            detail="Belge bulunamadı.",
+        )
 
 
 @router.post("")
@@ -163,6 +187,8 @@ async def upload_document(
 def get_document_text(
     document_id: str,
 ):
+    validate_document_id(document_id)
+
     document_directory = (
         UPLOAD_ROOT / document_id
     )
@@ -254,6 +280,8 @@ def get_document_text(
 def analyze_document(
     document_id: str,
 ):
+    validate_document_id(document_id)
+
     document_directory = (
         UPLOAD_ROOT / document_id
     )
@@ -326,6 +354,8 @@ def analyze_document(
 def highlight_document(
     document_id: str,
 ):
+    validate_document_id(document_id)
+
     document_directory = (
         UPLOAD_ROOT / document_id
     )
@@ -430,6 +460,8 @@ def highlight_document(
 def redact_document(
     document_id: str,
 ):
+    validate_document_id(document_id)
+
     document_directory = (
         UPLOAD_ROOT / document_id
     )
@@ -543,6 +575,8 @@ def redact_selected_document(
     document_id: str,
     request: RedactionSelectionRequest,
 ):
+    validate_document_id(document_id)
+
     document_directory = (
         UPLOAD_ROOT / document_id
     )
