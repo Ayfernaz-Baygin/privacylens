@@ -1,6 +1,5 @@
 from pathlib import Path
 from uuid import UUID, uuid4
-import shutil
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
@@ -15,6 +14,10 @@ from backend.app.services.document_processing import (
 )
 from backend.app.services.docx_parser import extract_text_from_docx
 from backend.app.services.docx_redactor import create_redacted_docx
+from backend.app.services.file_validation import (
+    validate_file_content,
+    validate_safe_office_zip,
+)
 from backend.app.services.pdf_highlighter import create_highlighted_pdf
 from backend.app.services.pdf_locator import locate_text_in_pdf
 from backend.app.services.pdf_parser import extract_text_from_pdf
@@ -49,6 +52,11 @@ ALLOWED_CONTENT_TYPES = {
     "application/pdf",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
+
+ZIP_BASED_EXTENSIONS = {
+    ".docx",
+    ".xlsx",
 }
 
 DOCUMENT_FORMAT_LABELS = {
@@ -120,6 +128,64 @@ async def upload_document(
             detail="Desteklenmeyen dosya türü.",
         )
 
+    chunk_size = 1024 * 1024
+    buffer = bytearray()
+
+    try:
+        while True:
+            chunk = await file.read(
+                chunk_size
+            )
+
+            if not chunk:
+                break
+
+            buffer.extend(chunk)
+
+            if len(buffer) > MAX_FILE_SIZE:
+                raise HTTPException(
+                    status_code=413,
+                    detail=(
+                        "Dosya boyutu maksimum "
+                        "20 MB olabilir."
+                    ),
+                )
+
+    finally:
+        await file.close()
+
+    content = bytes(buffer)
+
+    # Extension and declared Content-Type are both attacker-controlled
+    # (checked above only for early/UX rejection); the accept/reject
+    # security decision is made from the real bytes, before anything is
+    # written to disk, so a rejected upload never leaves a document
+    # directory or source file behind.
+    if not validate_file_content(extension, content):
+        raise HTTPException(
+            status_code=415,
+            detail=(
+                "Dosya içeriği beyan edilen "
+                "dosya türüyle uyuşmuyor."
+            ),
+        )
+
+    # DOCX/XLSX are ZIP archives; check their ZipInfo metadata for
+    # decompression-abuse (zip bomb) shapes before python-docx/openpyxl
+    # ever open the file. Runs after the structural DOCX/XLSX check
+    # above as an additional layer, not a replacement for it.
+    if (
+        extension in ZIP_BASED_EXTENSIONS
+        and not validate_safe_office_zip(content)
+    ):
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                "Dosyanın sıkıştırılmış içeriği "
+                "güvenli sınırları aşıyor."
+            ),
+        )
+
     document_id = str(uuid4())
 
     document_directory = (
@@ -136,49 +202,13 @@ async def upload_document(
         / f"source{extension}"
     )
 
-    total_size = 0
-    chunk_size = 1024 * 1024
-
-    try:
-        with destination.open(
-            "wb"
-        ) as output_file:
-            while True:
-                chunk = await file.read(
-                    chunk_size
-                )
-
-                if not chunk:
-                    break
-
-                total_size += len(chunk)
-
-                if total_size > MAX_FILE_SIZE:
-                    raise HTTPException(
-                        status_code=413,
-                        detail=(
-                            "Dosya boyutu maksimum "
-                            "20 MB olabilir."
-                        ),
-                    )
-
-                output_file.write(chunk)
-
-    except Exception:
-        shutil.rmtree(
-            document_directory,
-            ignore_errors=True,
-        )
-        raise
-
-    finally:
-        await file.close()
+    destination.write_bytes(content)
 
     return {
         "id": document_id,
         "filename": file.filename,
         "content_type": file.content_type,
-        "size_bytes": total_size,
+        "size_bytes": len(content),
         "status": "uploaded",
     }
 
