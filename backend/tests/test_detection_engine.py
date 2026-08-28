@@ -78,3 +78,13 @@ def test_detection_engine_can_include_ner(monkeypatch):
     assert findings[0]["value"] == "Ayşe Yılmaz"
     assert findings[0]["page_number"] == 2
     assert findings[0]["source"] == "ner_model"    
+
+def test_detection_engine_adds_privacy_status():
+    findings = detect_sensitive_data(
+        text="İletişim: test@example.com",
+        page_number=1,
+    )
+
+    assert len(findings) == 1
+    assert findings[0]["type"] == "EMAIL"
+    assert findings[0]["privacy_status"] == "SENSITIVE"

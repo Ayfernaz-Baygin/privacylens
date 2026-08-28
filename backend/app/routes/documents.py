@@ -10,6 +10,7 @@ from backend.app.services.pdf_highlighter import create_highlighted_pdf
 from backend.app.services.pdf_locator import locate_text_in_pdf
 from backend.app.services.pdf_parser import extract_text_from_pdf
 from backend.app.services.pdf_redactor import create_redacted_pdf
+from backend.app.services.privacy_policy import filter_auto_redact_findings
 
 
 router = APIRouter(
@@ -33,23 +34,33 @@ ALLOWED_CONTENT_TYPES = {
 MAX_FILE_SIZE = 20 * 1024 * 1024
 
 UPLOAD_ROOT = Path("tmp/privacylens")
-UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
+UPLOAD_ROOT.mkdir(
+    parents=True,
+    exist_ok=True,
+)
 
 
 @router.post("")
-async def upload_document(file: UploadFile = File(...)):
+async def upload_document(
+    file: UploadFile = File(...),
+):
     if not file.filename:
         raise HTTPException(
             status_code=400,
             detail="Dosya adı bulunamadı.",
         )
 
-    extension = Path(file.filename).suffix.lower()
+    extension = Path(
+        file.filename
+    ).suffix.lower()
 
     if extension not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=415,
-            detail="Sadece PDF, DOCX ve XLSX dosyaları desteklenmektedir.",
+            detail=(
+                "Sadece PDF, DOCX ve XLSX "
+                "dosyaları desteklenmektedir."
+            ),
         )
 
     if file.content_type not in ALLOWED_CONTENT_TYPES:
@@ -60,21 +71,31 @@ async def upload_document(file: UploadFile = File(...)):
 
     document_id = str(uuid4())
 
-    document_directory = UPLOAD_ROOT / document_id
+    document_directory = (
+        UPLOAD_ROOT / document_id
+    )
+
     document_directory.mkdir(
         parents=True,
         exist_ok=True,
     )
 
-    destination = document_directory / f"source{extension}"
+    destination = (
+        document_directory
+        / f"source{extension}"
+    )
 
     total_size = 0
     chunk_size = 1024 * 1024
 
     try:
-        with destination.open("wb") as output_file:
+        with destination.open(
+            "wb"
+        ) as output_file:
             while True:
-                chunk = await file.read(chunk_size)
+                chunk = await file.read(
+                    chunk_size
+                )
 
                 if not chunk:
                     break
@@ -84,7 +105,10 @@ async def upload_document(file: UploadFile = File(...)):
                 if total_size > MAX_FILE_SIZE:
                     raise HTTPException(
                         status_code=413,
-                        detail="Dosya boyutu maksimum 20 MB olabilir.",
+                        detail=(
+                            "Dosya boyutu maksimum "
+                            "20 MB olabilir."
+                        ),
                     )
 
                 output_file.write(chunk)
@@ -109,9 +133,17 @@ async def upload_document(file: UploadFile = File(...)):
 
 
 @router.get("/{document_id}/text")
-def get_document_text(document_id: str):
-    document_directory = UPLOAD_ROOT / document_id
-    pdf_path = document_directory / "source.pdf"
+def get_document_text(
+    document_id: str,
+):
+    document_directory = (
+        UPLOAD_ROOT / document_id
+    )
+
+    pdf_path = (
+        document_directory
+        / "source.pdf"
+    )
 
     if not document_directory.exists():
         raise HTTPException(
@@ -122,16 +154,25 @@ def get_document_text(document_id: str):
     if not pdf_path.exists():
         raise HTTPException(
             status_code=415,
-            detail="Bu aşamada metin çıkarma yalnızca PDF dosyalarını destekliyor.",
+            detail=(
+                "Bu aşamada metin çıkarma "
+                "yalnızca PDF dosyalarını "
+                "destekliyor."
+            ),
         )
 
     try:
-        result = extract_text_from_pdf(pdf_path)
+        result = extract_text_from_pdf(
+            pdf_path
+        )
 
     except Exception:
         raise HTTPException(
             status_code=422,
-            detail="PDF dosyası okunamadı veya geçerli bir PDF değil.",
+            detail=(
+                "PDF dosyası okunamadı "
+                "veya geçerli bir PDF değil."
+            ),
         )
 
     return {
@@ -142,9 +183,17 @@ def get_document_text(document_id: str):
 
 
 @router.get("/{document_id}/analyze")
-def analyze_document(document_id: str):
-    document_directory = UPLOAD_ROOT / document_id
-    pdf_path = document_directory / "source.pdf"
+def analyze_document(
+    document_id: str,
+):
+    document_directory = (
+        UPLOAD_ROOT / document_id
+    )
+
+    pdf_path = (
+        document_directory
+        / "source.pdf"
+    )
 
     if not document_directory.exists():
         raise HTTPException(
@@ -155,52 +204,92 @@ def analyze_document(document_id: str):
     if not pdf_path.exists():
         raise HTTPException(
             status_code=415,
-            detail="Bu aşamada analiz yalnızca PDF dosyalarını destekliyor.",
+            detail=(
+                "Bu aşamada analiz yalnızca "
+                "PDF dosyalarını destekliyor."
+            ),
         )
 
     try:
-        parsed_document = extract_text_from_pdf(pdf_path)
+        parsed_document = (
+            extract_text_from_pdf(
+                pdf_path
+            )
+        )
 
     except Exception:
         raise HTTPException(
             status_code=422,
-            detail="PDF dosyası analiz edilemedi.",
+            detail=(
+                "PDF dosyası "
+                "analiz edilemedi."
+            ),
         )
 
     findings = []
 
     for page in parsed_document["pages"]:
-        page_findings = detect_sensitive_data(
-            text=page["text"],
-            page_number=page["page_number"],
-            include_ner=True,
+        page_findings = (
+            detect_sensitive_data(
+                text=page["text"],
+                page_number=page[
+                    "page_number"
+                ],
+                include_ner=True,
+            )
         )
 
         for finding in page_findings:
-            bounding_boxes = locate_text_in_pdf(
-                file_path=pdf_path,
-                page_number=page["page_number"],
-                value=finding["value"],
+            bounding_boxes = (
+                locate_text_in_pdf(
+                    file_path=pdf_path,
+                    page_number=page[
+                        "page_number"
+                    ],
+                    value=finding[
+                        "value"
+                    ],
+                )
             )
 
-            finding["bounding_boxes"] = bounding_boxes
+            finding[
+                "bounding_boxes"
+            ] = bounding_boxes
 
-        findings.extend(page_findings)
+        findings.extend(
+            page_findings
+        )
 
     return {
         "id": document_id,
         "status": "analyzed",
-        "page_count": parsed_document["page_count"],
-        "finding_count": len(findings),
+        "page_count": parsed_document[
+            "page_count"
+        ],
+        "finding_count": len(
+            findings
+        ),
         "findings": findings,
     }
 
 
 @router.get("/{document_id}/highlight")
-def highlight_document(document_id: str):
-    document_directory = UPLOAD_ROOT / document_id
-    pdf_path = document_directory / "source.pdf"
-    highlighted_path = document_directory / "highlighted.pdf"
+def highlight_document(
+    document_id: str,
+):
+    document_directory = (
+        UPLOAD_ROOT / document_id
+    )
+
+    pdf_path = (
+        document_directory
+        / "source.pdf"
+    )
+
+    highlighted_path = (
+        document_directory
+        / "highlighted.pdf"
+    )
 
     if not document_directory.exists():
         raise HTTPException(
@@ -211,42 +300,69 @@ def highlight_document(document_id: str):
     if not pdf_path.exists():
         raise HTTPException(
             status_code=415,
-            detail="Highlight işlemi yalnızca PDF dosyalarını destekliyor.",
+            detail=(
+                "Highlight işlemi yalnızca "
+                "PDF dosyalarını destekliyor."
+            ),
         )
 
     try:
-        parsed_document = extract_text_from_pdf(pdf_path)
+        parsed_document = (
+            extract_text_from_pdf(
+                pdf_path
+            )
+        )
 
     except Exception:
         raise HTTPException(
             status_code=422,
-            detail="PDF dosyası analiz edilemedi.",
+            detail=(
+                "PDF dosyası "
+                "analiz edilemedi."
+            ),
         )
 
     findings = []
 
     for page in parsed_document["pages"]:
-        page_findings = detect_sensitive_data(
-            text=page["text"],
-            page_number=page["page_number"],
-            include_ner=True,
+        page_findings = (
+            detect_sensitive_data(
+                text=page["text"],
+                page_number=page[
+                    "page_number"
+                ],
+                include_ner=True,
+            )
         )
 
         for finding in page_findings:
-            bounding_boxes = locate_text_in_pdf(
-                file_path=pdf_path,
-                page_number=page["page_number"],
-                value=finding["value"],
+            bounding_boxes = (
+                locate_text_in_pdf(
+                    file_path=pdf_path,
+                    page_number=page[
+                        "page_number"
+                    ],
+                    value=finding[
+                        "value"
+                    ],
+                )
             )
 
-            finding["bounding_boxes"] = bounding_boxes
+            finding[
+                "bounding_boxes"
+            ] = bounding_boxes
 
-        findings.extend(page_findings)
+        findings.extend(
+            page_findings
+        )
 
     if not findings:
         raise HTTPException(
             status_code=404,
-            detail="Highlight edilecek hassas veri bulunamadı.",
+            detail=(
+                "Highlight edilecek "
+                "hassas veri bulunamadı."
+            ),
         )
 
     create_highlighted_pdf(
@@ -258,15 +374,30 @@ def highlight_document(document_id: str):
     return FileResponse(
         path=highlighted_path,
         media_type="application/pdf",
-        filename=f"privacylens-highlighted-{document_id}.pdf",
+        filename=(
+            "privacylens-highlighted-"
+            f"{document_id}.pdf"
+        ),
     )
 
 
 @router.get("/{document_id}/redact")
-def redact_document(document_id: str):
-    document_directory = UPLOAD_ROOT / document_id
-    pdf_path = document_directory / "source.pdf"
-    redacted_path = document_directory / "redacted.pdf"
+def redact_document(
+    document_id: str,
+):
+    document_directory = (
+        UPLOAD_ROOT / document_id
+    )
+
+    pdf_path = (
+        document_directory
+        / "source.pdf"
+    )
+
+    redacted_path = (
+        document_directory
+        / "redacted.pdf"
+    )
 
     if not document_directory.exists():
         raise HTTPException(
@@ -277,52 +408,88 @@ def redact_document(document_id: str):
     if not pdf_path.exists():
         raise HTTPException(
             status_code=415,
-            detail="Redaction işlemi yalnızca PDF dosyalarını destekliyor.",
+            detail=(
+                "Redaction işlemi yalnızca "
+                "PDF dosyalarını destekliyor."
+            ),
         )
 
     try:
-        parsed_document = extract_text_from_pdf(pdf_path)
+        parsed_document = (
+            extract_text_from_pdf(
+                pdf_path
+            )
+        )
 
     except Exception:
         raise HTTPException(
             status_code=422,
-            detail="PDF dosyası analiz edilemedi.",
+            detail=(
+                "PDF dosyası "
+                "analiz edilemedi."
+            ),
         )
 
     findings = []
 
     for page in parsed_document["pages"]:
-        page_findings = detect_sensitive_data(
-            text=page["text"],
-            page_number=page["page_number"],
-            include_ner=True,
+        page_findings = (
+            detect_sensitive_data(
+                text=page["text"],
+                page_number=page[
+                    "page_number"
+                ],
+                include_ner=True,
+            )
         )
 
         for finding in page_findings:
-            bounding_boxes = locate_text_in_pdf(
-                file_path=pdf_path,
-                page_number=page["page_number"],
-                value=finding["value"],
+            bounding_boxes = (
+                locate_text_in_pdf(
+                    file_path=pdf_path,
+                    page_number=page[
+                        "page_number"
+                    ],
+                    value=finding[
+                        "value"
+                    ],
+                )
             )
 
-            finding["bounding_boxes"] = bounding_boxes
+            finding[
+                "bounding_boxes"
+            ] = bounding_boxes
 
-        findings.extend(page_findings)
+        findings.extend(
+            page_findings
+        )
 
-    if not findings:
+    sensitive_findings = (
+        filter_auto_redact_findings(
+            findings
+        )
+    )
+
+    if not sensitive_findings:
         raise HTTPException(
             status_code=404,
-            detail="Maskelenecek hassas veri bulunamadı.",
+            detail=(
+                "Otomatik maskelenecek "
+                "hassas veri bulunamadı."
+            ),
         )
 
     create_redacted_pdf(
         source_path=pdf_path,
         output_path=redacted_path,
-        findings=findings,
+        findings=sensitive_findings,
     )
 
     return FileResponse(
         path=redacted_path,
         media_type="application/pdf",
-        filename=f"privacylens-redacted-{document_id}.pdf",
+        filename=(
+            "privacylens-redacted-"
+            f"{document_id}.pdf"
+        ),
     )

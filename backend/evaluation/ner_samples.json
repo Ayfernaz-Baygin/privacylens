@@ -2,75 +2,147 @@
   {
     "text": "Ad Soyad: Ayşe Yılmaz\nDoğum Yeri: İstanbul",
     "entities": [
-      {"type": "PERSON", "value": "Ayşe Yılmaz"},
-      {"type": "LOCATION", "value": "İstanbul"}
+      {
+        "type": "PERSON",
+        "value": "Ayşe Yılmaz"
+      },
+      {
+        "type": "LOCATION",
+        "value": "İstanbul"
+      }
     ]
   },
   {
     "text": "Müşteri: Mehmet Kaya\nFirma: ABC Teknoloji A.Ş.",
     "entities": [
-      {"type": "PERSON", "value": "Mehmet Kaya"},
-      {"type": "ORGANIZATION", "value": "ABC Teknoloji A.Ş."}
+      {
+        "type": "PERSON",
+        "value": "Mehmet Kaya"
+      },
+      {
+        "type": "ORGANIZATION",
+        "value": "ABC Teknoloji A.Ş."
+      }
     ]
   },
   {
     "text": "Prof. Dr. Selin Arslan bugün Ankara'da toplantıya katıldı.",
     "entities": [
-      {"type": "PERSON", "value": "Selin Arslan"},
-      {"type": "LOCATION", "value": "Ankara"}
+      {
+        "type": "PERSON",
+        "value": "Selin Arslan"
+      },
+      {
+        "type": "LOCATION",
+        "value": "Ankara"
+      }
     ]
   },
   {
     "text": "Ahmet Yıldız ile Zeynep Demir İzmir'deki toplantıda görüştü.",
     "entities": [
-      {"type": "PERSON", "value": "Ahmet Yıldız"},
-      {"type": "PERSON", "value": "Zeynep Demir"},
-      {"type": "LOCATION", "value": "İzmir"}
+      {
+        "type": "PERSON",
+        "value": "Ahmet Yıldız"
+      },
+      {
+        "type": "PERSON",
+        "value": "Zeynep Demir"
+      },
+      {
+        "type": "LOCATION",
+        "value": "İzmir"
+      }
     ]
   },
   {
     "text": "Çalışan Adı\nMurat Çelik\nŞube\nAntalya",
     "entities": [
-      {"type": "PERSON", "value": "Murat Çelik"},
-      {"type": "LOCATION", "value": "Antalya"}
+      {
+        "type": "PERSON",
+        "value": "Murat Çelik"
+      },
+      {
+        "type": "LOCATION",
+        "value": "Antalya"
+      }
     ]
   },
   {
     "text": "Elif Şahin, İstanbul Üniversitesi tarafından düzenlenen seminere katıldı.",
     "entities": [
-      {"type": "PERSON", "value": "Elif Şahin"},
-      {"type": "ORGANIZATION", "value": "İstanbul Üniversitesi"}
+      {
+        "type": "PERSON",
+        "value": "Elif Şahin"
+      },
+      {
+        "type": "ORGANIZATION",
+        "value": "İstanbul Üniversitesi"
+      }
     ]
   },
   {
     "text": "TeknoSoft çalışanı Can Öztürk Bursa ofisine transfer edildi.",
     "entities": [
-      {"type": "ORGANIZATION", "value": "TeknoSoft"},
-      {"type": "PERSON", "value": "Can Öztürk"},
-      {"type": "LOCATION", "value": "Bursa"}
+      {
+        "type": "ORGANIZATION",
+        "value": "TeknoSoft"
+      },
+      {
+        "type": "PERSON",
+        "value": "Can Öztürk"
+      },
+      {
+        "type": "LOCATION",
+        "value": "Bursa"
+      }
     ]
   },
   {
     "text": "Deniz Acar'ın Eskişehir'deki ikamet bilgileri güncellendi.",
     "entities": [
-      {"type": "PERSON", "value": "Deniz Acar"},
-      {"type": "LOCATION", "value": "Eskişehir"}
+      {
+        "type": "PERSON",
+        "value": "Deniz Acar"
+      },
+      {
+        "type": "LOCATION",
+        "value": "Eskişehir"
+      }
     ]
   },
   {
     "text": "Burak Koç Microsoft Türkiye ile İstanbul'da sözleşme imzaladı.",
     "entities": [
-      {"type": "PERSON", "value": "Burak Koç"},
-      {"type": "ORGANIZATION", "value": "Microsoft Türkiye"},
-      {"type": "LOCATION", "value": "İstanbul"}
+      {
+        "type": "PERSON",
+        "value": "Burak Koç"
+      },
+      {
+        "type": "ORGANIZATION",
+        "value": "Microsoft Türkiye"
+      },
+      {
+        "type": "LOCATION",
+        "value": "İstanbul"
+      }
     ]
   },
   {
     "text": "Sayın Mehmet Ali Yıldırım, Nova Teknoloji adına Ankara şubesini ziyaret etti.",
     "entities": [
-      {"type": "PERSON", "value": "Mehmet Ali Yıldırım"},
-      {"type": "ORGANIZATION", "value": "Nova Teknoloji"},
-      {"type": "LOCATION", "value": "Ankara"}
+      {
+        "type": "PERSON",
+        "value": "Mehmet Ali Yıldırım"
+      },
+      {
+        "type": "ORGANIZATION",
+        "value": "Nova Teknoloji"
+      },
+      {
+        "type": "LOCATION",
+        "value": "Ankara"
+      }
     ]
   },
   {
@@ -92,23 +164,44 @@
   {
     "text": "Firma temsilcisi Ece Nur Aksoy, Ege Yazılım Sanayi ve Ticaret A.Ş. adına sözleşmeyi imzaladı.",
     "entities": [
-      {"type": "PERSON", "value": "Ece Nur Aksoy"},
-      {"type": "ORGANIZATION", "value": "Ege Yazılım Sanayi ve Ticaret A.Ş."}
+      {
+        "type": "PERSON",
+        "value": "Ece Nur Aksoy"
+      },
+      {
+        "type": "ORGANIZATION",
+        "value": "Ege Yazılım Sanayi ve Ticaret A.Ş."
+      }
     ]
   },
   {
     "text": "Doktor: Dr. Kerem Can Özdemir\nHastane: Acıbadem Sağlık Grubu",
     "entities": [
-      {"type": "PERSON", "value": "Kerem Can Özdemir"},
-      {"type": "ORGANIZATION", "value": "Acıbadem Sağlık Grubu"}
+      {
+        "type": "PERSON",
+        "value": "Kerem Can Özdemir"
+      },
+      {
+        "type": "ORGANIZATION",
+        "value": "Acıbadem Sağlık Grubu"
+      }
     ]
   },
   {
     "text": "Gönderici: Aslı Güneş\nAlıcı: Barış Korkmaz\nTeslimat: Muğla",
     "entities": [
-      {"type": "PERSON", "value": "Aslı Güneş"},
-      {"type": "PERSON", "value": "Barış Korkmaz"},
-      {"type": "LOCATION", "value": "Muğla"}
+      {
+        "type": "PERSON",
+        "value": "Aslı Güneş"
+      },
+      {
+        "type": "PERSON",
+        "value": "Barış Korkmaz"
+      },
+      {
+        "type": "LOCATION",
+        "value": "Muğla"
+      }
     ]
   },
   {
@@ -118,17 +211,124 @@
   {
     "text": "Genel Müdür Oğuzhan Demirci, Anadolu Yazılım Ltd. Şti. adına Kayseri'de açıklama yaptı.",
     "entities": [
-      {"type": "PERSON", "value": "Oğuzhan Demirci"},
-      {"type": "ORGANIZATION", "value": "Anadolu Yazılım Ltd. Şti."},
-      {"type": "LOCATION", "value": "Kayseri"}
+      {
+        "type": "PERSON",
+        "value": "Oğuzhan Demirci"
+      },
+      {
+        "type": "ORGANIZATION",
+        "value": "Anadolu Yazılım Ltd. Şti."
+      },
+      {
+        "type": "LOCATION",
+        "value": "Kayseri"
+      }
     ]
   },
   {
     "text": "Adı ve Soyadı: İrem Su Yalçın\nÇalıştığı Kurum: Marmara Araştırma Merkezi\nŞehir: Kocaeli",
     "entities": [
-      {"type": "PERSON", "value": "İrem Su Yalçın"},
-      {"type": "ORGANIZATION", "value": "Marmara Araştırma Merkezi"},
-      {"type": "LOCATION", "value": "Kocaeli"}
+      {
+        "type": "PERSON",
+        "value": "İrem Su Yalçın"
+      },
+      {
+        "type": "ORGANIZATION",
+        "value": "Marmara Araştırma Merkezi"
+      },
+      {
+        "type": "LOCATION",
+        "value": "Kocaeli"
+      }
     ]
+  },
+  {
+    "text": "Ürün: Ankara Serisi Çalışma Masası\nStok Kodu: ANK-4821",
+    "entities": []
+  },
+  {
+    "text": "İstanbul şubesinde görev yapan Melis Karaca, Delta Yazılım adına toplantıya katıldı.",
+    "entities": [
+      {
+        "type": "LOCATION",
+        "value": "İstanbul"
+      },
+      {
+        "type": "PERSON",
+        "value": "Melis Karaca"
+      },
+      {
+        "type": "ORGANIZATION",
+        "value": "Delta Yazılım"
+      }
+    ]
+  },
+  {
+    "text": "Referans: NOVA-2026-8831\nBaşvuru durumu: İncelemede",
+    "entities": []
+  },
+  {
+    "text": "Nova Teknoloji tarafından gönderilen teklif Emre Akın tarafından onaylandı.",
+    "entities": [
+      {
+        "type": "ORGANIZATION",
+        "value": "Nova Teknoloji"
+      },
+      {
+        "type": "PERSON",
+        "value": "Emre Akın"
+      }
+    ]
+  },
+  {
+    "text": "Teslimat adresi değişikliği nedeniyle paket İzmir dağıtım merkezine yönlendirildi.",
+    "entities": [
+      {
+        "type": "LOCATION",
+        "value": "İzmir"
+      }
+    ]
+  },
+  {
+    "text": "Model: Bursa Premium Koltuk Takımı\nÜrün Kodu: BR-993",
+    "entities": []
+  },
+  {
+    "text": "Başvuru sahibi Fatma Nur Keskin, Kayseri Büyükşehir Belediyesi ile görüşme gerçekleştirdi.",
+    "entities": [
+      {
+        "type": "PERSON",
+        "value": "Fatma Nur Keskin"
+      },
+      {
+        "type": "ORGANIZATION",
+        "value": "Kayseri Büyükşehir Belediyesi"
+      }
+    ]
+  },
+  {
+    "text": "Kod: MICROSOFT-45881\nDurum: İşlem tamamlandı.",
+    "entities": []
+  },
+  {
+    "text": "Proje sorumlusu Ali Can Polat ile Sistem Teknoloji Ltd. Şti. temsilcileri Antalya'da buluştu.",
+    "entities": [
+      {
+        "type": "PERSON",
+        "value": "Ali Can Polat"
+      },
+      {
+        "type": "ORGANIZATION",
+        "value": "Sistem Teknoloji Ltd. Şti."
+      },
+      {
+        "type": "LOCATION",
+        "value": "Antalya"
+      }
+    ]
+  },
+  {
+    "text": "Başlık: İstanbul'da Yaşam Rehberi\nDoküman türü: Makale",
+    "entities": []
   }
 ]
