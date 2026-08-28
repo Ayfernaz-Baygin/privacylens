@@ -562,7 +562,9 @@ def redact_selected_document(
             ),
         )
 
-    is_docx = analysis["is_docx"]
+    is_docx = (
+        analysis["document_format"] == "docx"
+    )
 
     selected_findings = (
         select_redaction_findings(

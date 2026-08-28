@@ -47,7 +47,7 @@ def test_analyze_document_file_uses_pdf_and_locates_boxes(
         docx_path=docx_path,
     )
 
-    assert result["is_docx"] is False
+    assert result["document_format"] == "pdf"
     assert result["page_count"] == 1
     assert len(result["findings"]) == 1
 
@@ -75,7 +75,7 @@ def test_analyze_document_file_uses_docx_with_empty_boxes(
         docx_path=docx_path,
     )
 
-    assert result["is_docx"] is True
+    assert result["document_format"] == "docx"
     assert result["page_count"] == 1
     assert len(result["findings"]) == 1
 
@@ -107,7 +107,7 @@ def test_analyze_document_file_prefers_pdf_when_both_exist(
         docx_path=docx_path,
     )
 
-    assert result["is_docx"] is False
+    assert result["document_format"] == "pdf"
 
 
 def test_analyze_document_file_raises_when_neither_exists(tmp_path):

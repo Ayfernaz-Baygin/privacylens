@@ -32,7 +32,8 @@ def analyze_document_file(
     docx_path: Path,
 ) -> dict:
     """Parses whichever of pdf_path/docx_path exists and returns
-    findings with bounding_boxes and finding_id already attached.
+    document_format ("pdf"/"docx") plus findings with bounding_boxes and
+    finding_id already attached.
 
     PDF findings get real bounding_boxes via locate_text_in_pdf; DOCX has
     no page/coordinate concept yet, so its findings get bounding_boxes=[].
@@ -40,7 +41,7 @@ def analyze_document_file(
     DocumentParseError (carrying "pdf"/"docx") if the parser fails.
     """
     if pdf_path.exists():
-        is_docx = False
+        document_format = "pdf"
 
         try:
             parsed_document = extract_text_from_pdf(pdf_path)
@@ -48,7 +49,7 @@ def analyze_document_file(
             raise DocumentParseError("pdf") from error
 
     elif docx_path.exists():
-        is_docx = True
+        document_format = "docx"
 
         try:
             parsed_document = extract_text_from_docx(docx_path)
@@ -68,21 +69,21 @@ def analyze_document_file(
         )
 
         for finding in page_findings:
-            if is_docx:
-                finding["bounding_boxes"] = []
-            else:
+            if document_format == "pdf":
                 finding["bounding_boxes"] = locate_text_in_pdf(
                     file_path=pdf_path,
                     page_number=page["page_number"],
                     value=finding["value"],
                 )
+            else:
+                finding["bounding_boxes"] = []
 
             finding["finding_id"] = build_finding_id(finding)
 
         findings.extend(page_findings)
 
     return {
-        "is_docx": is_docx,
+        "document_format": document_format,
         "page_count": parsed_document["page_count"],
         "findings": findings,
     }
