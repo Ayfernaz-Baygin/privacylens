@@ -187,6 +187,36 @@ function App() {
       confidence * 100
     )}%`;
   };
+  const autoRedactCount =
+  analysis?.findings.filter(
+    (finding) =>
+      finding.redaction_action ===
+      "AUTO_REDACT"
+  ).length || 0;
+
+const reviewFindings =
+  analysis?.findings.filter(
+    (finding) =>
+      finding.redaction_action === "REVIEW"
+  ) || [];
+
+const reviewCount =
+  reviewFindings.length;
+
+const selectedReviewCount =
+  selectedReviewIds.length;
+
+const handleSelectAllReview = () => {
+  const reviewIds = reviewFindings
+    .map((finding) => finding.finding_id)
+    .filter(Boolean);
+
+  setSelectedReviewIds(reviewIds);
+};
+
+const handleClearReview = () => {
+  setSelectedReviewIds([]);
+};
 
   return (
     <div className="app">
@@ -408,6 +438,71 @@ function App() {
                 {analysis.page_count} page
               </div>
             </div>
+
+
+ <div className="analysis-summary">
+  <div className="summary-item">
+    <span>Total Findings</span>
+    <strong>
+      {analysis.finding_count}
+    </strong>
+  </div>
+
+  <div className="summary-item auto-summary">
+    <span>Auto Redact</span>
+    <strong>
+      {autoRedactCount}
+    </strong>
+  </div>
+
+  <div className="summary-item review-summary">
+    <span>Needs Review</span>
+    <strong>
+      {reviewCount}
+    </strong>
+  </div>
+
+  <div className="summary-item">
+    <span>Review Selected</span>
+    <strong>
+      {selectedReviewCount}
+    </strong>
+  </div>
+</div>      
+
+{reviewCount > 0 && (
+  <div className="review-toolbar">
+    <div>
+      <strong>
+        Review uncertain findings
+      </strong>
+
+      <span>
+        Select additional data that should
+        be removed from the document.
+      </span>
+    </div>
+
+    <div className="review-toolbar-actions">
+      <button
+        className="secondary-button"
+        onClick={handleSelectAllReview}
+      >
+        Select All Review
+      </button>
+
+      <button
+        className="secondary-button"
+        onClick={handleClearReview}
+        disabled={
+          selectedReviewIds.length === 0
+        }
+      >
+        Clear Selection
+      </button>
+    </div>
+  </div>
+)}
 
             <div className="findings-grid">
               {analysis.findings.map(
