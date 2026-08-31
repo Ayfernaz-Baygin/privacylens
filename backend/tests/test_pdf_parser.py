@@ -90,15 +90,59 @@ class OcrPage:
 
 
 class HybridPage(NativePage):
+    def __init__(self, spans=None):
+        super().__init__()
+        self.ocr_kwargs = None
+        self.text_page = object()
+        self.spans = spans or [
+            {
+                "bbox": (0, 0, 100, 10),
+                "font": "Helvetica",
+                "chars": [
+                    {"c": character}
+                    for character in "Header"
+                ],
+            },
+            {
+                "bbox": (10, 30, 90, 45),
+                "font": "GlyphLessFont",
+                "chars": [
+                    {"c": character}
+                    for character in "ocr@example.com"
+                ],
+            },
+        ]
+
     def get_text(self, output, **kwargs):
         if output == "text":
             return "Header\n"
 
-        assert output == "words"
-        return [(0, 0, 100, 10, "Header")]
+        if output == "words":
+            return [(0, 0, 100, 10, "Header")]
+
+        assert output == "rawdict"
+        assert kwargs == {
+            "textpage": self.text_page,
+            "sort": True,
+        }
+        return {
+            "blocks": [
+                {
+                    "lines": [
+                        {"spans": [self.spans[0]]},
+                        {"spans": self.spans[1:]},
+                    ]
+                }
+            ]
+        }
 
     def get_image_info(self):
         return [{"bbox": (0, 20, 100, 100)}]
+
+    def get_textpage_ocr(self, **kwargs):
+        self.ocr_called = True
+        self.ocr_kwargs = kwargs
+        return self.text_page
 
 
 class FailingOcrPage:
@@ -214,7 +258,9 @@ def test_native_page_does_not_call_ocr(monkeypatch):
     assert document.closed is True
 
 
-def test_hybrid_page_is_classified_without_running_ocr(monkeypatch):
+def test_hybrid_page_uses_partial_ocr_and_builds_canonical_regions(
+    monkeypatch,
+):
     page = HybridPage()
     document = FakeDocument([page])
     monkeypatch.setattr(
@@ -224,13 +270,122 @@ def test_hybrid_page_is_classified_without_running_ocr(monkeypatch):
 
     result = extract_text_from_pdf("hybrid.pdf")
 
-    assert page.ocr_called is False
+    assert page.ocr_called is True
+    assert page.ocr_kwargs == {
+        "language": "tur+eng",
+        "dpi": 300,
+        "full": False,
+    }
     assert result["pages"][0] == {
         "page_number": 1,
-        "text": "Header\n",
+        "text": "Header\n|\nocr@example.com",
         "text_source": "hybrid",
-        "regions": [],
+        "regions": [
+            {
+                "start": 0,
+                "end": 6,
+                "text": "Header",
+                "source": "native",
+                "bbox": {
+                    "x0": 0,
+                    "y0": 0,
+                    "x1": 100,
+                    "y1": 10,
+                },
+            },
+            {
+                "start": 9,
+                "end": 24,
+                "text": "ocr@example.com",
+                "source": "ocr",
+                "bbox": {
+                    "x0": 10,
+                    "y0": 30,
+                    "x1": 90,
+                    "y1": 45,
+                },
+            },
+        ],
     }
+
+    parsed_page = result["pages"][0]
+
+    for region in parsed_page["regions"]:
+        assert parsed_page["text"][
+            region["start"]:region["end"]
+        ] == region["text"]
+
+
+def test_hybrid_removes_normalized_spatial_duplicate(monkeypatch):
+    page = HybridPage(
+        spans=[
+            {
+                "bbox": (10, 30, 90, 45),
+                "font": "Helvetica",
+                "chars": [
+                    {"c": character}
+                    for character in "Test   User"
+                ],
+            },
+            {
+                "bbox": (11, 30, 89, 45),
+                "font": "GlyphLessFont",
+                "chars": [
+                    {"c": character}
+                    for character in " test user "
+                ],
+            },
+        ]
+    )
+    document = FakeDocument([page])
+    monkeypatch.setattr(
+        "backend.app.services.pdf_parser.pymupdf.open",
+        lambda file_path: document,
+    )
+
+    parsed_page = extract_text_from_pdf("hybrid.pdf")["pages"][0]
+
+    assert parsed_page["text"] == "Test   User"
+    assert [
+        region["source"]
+        for region in parsed_page["regions"]
+    ] == ["native"]
+
+
+def test_hybrid_keeps_same_text_at_different_bbox(monkeypatch):
+    page = HybridPage(
+        spans=[
+            {
+                "bbox": (0, 0, 40, 10),
+                "font": "Helvetica",
+                "chars": [
+                    {"c": character}
+                    for character in "Same text"
+                ],
+            },
+            {
+                "bbox": (10, 40, 50, 50),
+                "font": "GlyphLessFont",
+                "chars": [
+                    {"c": character}
+                    for character in "Same text"
+                ],
+            },
+        ]
+    )
+    document = FakeDocument([page])
+    monkeypatch.setattr(
+        "backend.app.services.pdf_parser.pymupdf.open",
+        lambda file_path: document,
+    )
+
+    parsed_page = extract_text_from_pdf("hybrid.pdf")["pages"][0]
+
+    assert parsed_page["text"] == "Same text\n|\nSame text"
+    assert [
+        region["source"]
+        for region in parsed_page["regions"]
+    ] == ["native", "ocr"]
 
 
 def test_empty_page_uses_ocr_fallback(monkeypatch):

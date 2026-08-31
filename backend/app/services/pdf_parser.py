@@ -6,6 +6,9 @@ import pymupdf
 
 MIN_IMAGE_PAGE_AREA_RATIO = 0.20
 MIN_NATIVE_WORD_IMAGE_COVERAGE_RATIO = 0.05
+HYBRID_DUPLICATE_BBOX_OVERLAP_RATIO = 0.80
+HYBRID_SOURCE_SEPARATOR = "\n|\n"
+OCR_FONT_NAME = "GlyphLessFont"
 
 
 class PdfOcrError(Exception):
@@ -21,7 +24,14 @@ class PdfOcrError(Exception):
 
 
 def _bbox_coordinates(bbox) -> tuple[float, float, float, float]:
-    if all(
+    if isinstance(bbox, dict):
+        coordinates = (
+            bbox["x0"],
+            bbox["y0"],
+            bbox["x1"],
+            bbox["y1"],
+        )
+    elif all(
         hasattr(bbox, coordinate)
         for coordinate in ("x0", "y0", "x1", "y1")
     ):
@@ -65,6 +75,22 @@ def _intersection_area(first_bbox, second_bbox) -> float:
         return 0.0
 
     return width * height
+
+
+def _bbox_area(bbox) -> float:
+    return _intersection_area(bbox, bbox)
+
+
+def _bbox_overlap_ratio(first_bbox, second_bbox) -> float:
+    smaller_area = min(
+        _bbox_area(first_bbox),
+        _bbox_area(second_bbox),
+    )
+
+    if smaller_area <= 0:
+        return 0.0
+
+    return _intersection_area(first_bbox, second_bbox) / smaller_area
 
 
 def classify_pdf_page(page, native_text: str) -> str:
@@ -173,6 +199,147 @@ def _extract_ocr_text_and_regions(
     return "".join(text_parts), regions
 
 
+def _normalize_hybrid_text(text: str) -> str:
+    return " ".join(text.casefold().split())
+
+
+def _extract_hybrid_spans(page, text_page) -> list[dict]:
+    raw_text = page.get_text(
+        "rawdict",
+        textpage=text_page,
+        sort=True,
+    )
+    spans = []
+    line_number = 0
+
+    for block in raw_text.get("blocks", []):
+        for line in block.get("lines", []):
+            for span in line.get("spans", []):
+                span_text = "".join(
+                    character.get("c", "")
+                    for character in span.get("chars", [])
+                )
+
+                if not span_text:
+                    continue
+
+                x0, y0, x1, y1 = span["bbox"]
+                spans.append(
+                    {
+                        "text": span_text,
+                        "source": (
+                            "ocr"
+                            if span.get("font") == OCR_FONT_NAME
+                            else "native"
+                        ),
+                        "bbox": {
+                            "x0": x0,
+                            "y0": y0,
+                            "x1": x1,
+                            "y1": y1,
+                        },
+                        "line_number": line_number,
+                    }
+                )
+
+            line_number += 1
+
+    return spans
+
+
+def _deduplicate_hybrid_spans(spans: list[dict]) -> list[dict]:
+    native_spans = [
+        span
+        for span in spans
+        if span["source"] == "native"
+    ]
+    deduplicated = []
+
+    for span in spans:
+        if span["source"] != "ocr":
+            deduplicated.append(span)
+            continue
+
+        normalized_text = _normalize_hybrid_text(span["text"])
+        is_duplicate = any(
+            normalized_text
+            and normalized_text
+            == _normalize_hybrid_text(native_span["text"])
+            and _bbox_overlap_ratio(
+                span["bbox"],
+                native_span["bbox"],
+            )
+            >= HYBRID_DUPLICATE_BBOX_OVERLAP_RATIO
+            for native_span in native_spans
+        )
+
+        if not is_duplicate:
+            deduplicated.append(span)
+
+    return deduplicated
+
+
+def _build_hybrid_text_and_regions(
+    spans: list[dict],
+) -> tuple[str, list[dict]]:
+    text_parts = []
+    regions = []
+    offset = 0
+    source_has_text = False
+
+    for source in ("native", "ocr"):
+        source_spans = [
+            span
+            for span in spans
+            if span["source"] == source
+        ]
+
+        if not source_spans:
+            continue
+
+        if source_has_text:
+            text_parts.append(HYBRID_SOURCE_SEPARATOR)
+            offset += len(HYBRID_SOURCE_SEPARATOR)
+
+        previous_line_number = None
+
+        for span in source_spans:
+            if (
+                previous_line_number is not None
+                and span["line_number"] != previous_line_number
+            ):
+                text_parts.append("\n")
+                offset += 1
+
+            start = offset
+            end = start + len(span["text"])
+            text_parts.append(span["text"])
+            regions.append(
+                {
+                    "start": start,
+                    "end": end,
+                    "text": span["text"],
+                    "source": source,
+                    "bbox": span["bbox"].copy(),
+                }
+            )
+            offset = end
+            previous_line_number = span["line_number"]
+
+        source_has_text = True
+
+    return "".join(text_parts), regions
+
+
+def _extract_hybrid_text_and_regions(
+    page,
+    text_page,
+) -> tuple[str, list[dict]]:
+    spans = _extract_hybrid_spans(page, text_page)
+    deduplicated_spans = _deduplicate_hybrid_spans(spans)
+    return _build_hybrid_text_and_regions(deduplicated_spans)
+
+
 def extract_text_from_pdf(file_path: Path) -> dict:
     document = pymupdf.open(file_path)
 
@@ -183,14 +350,14 @@ def extract_text_from_pdf(file_path: Path) -> dict:
             text = page.get_text("text")
             text_source = classify_pdf_page(page, text)
 
-            if text_source != "ocr":
+            if text_source == "native":
                 parsed_page = {
                     "page_number": page_number + 1,
                     "text": text,
                     "text_source": text_source,
                     "regions": [],
                 }
-            else:
+            elif text_source == "ocr":
                 try:
                     text_page = page.get_textpage_ocr(
                         language="tur+eng",
@@ -212,6 +379,30 @@ def extract_text_from_pdf(file_path: Path) -> dict:
                     "page_number": page_number + 1,
                     "text": ocr_text,
                     "text_source": "ocr",
+                    "regions": regions,
+                }
+            else:
+                try:
+                    text_page = page.get_textpage_ocr(
+                        language="tur+eng",
+                        dpi=300,
+                        full=False,
+                    )
+                    hybrid_text, regions = (
+                        _extract_hybrid_text_and_regions(
+                            page,
+                            text_page,
+                        )
+                    )
+                except Exception as error:
+                    raise PdfOcrError(
+                        page_number + 1
+                    ) from error
+
+                parsed_page = {
+                    "page_number": page_number + 1,
+                    "text": hybrid_text,
+                    "text_source": "hybrid",
                     "regions": regions,
                 }
 
