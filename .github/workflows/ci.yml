@@ -55,3 +55,52 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  docker:
+    name: Docker build & smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ubuntu-latest runners report ~14GB free; the optimized backend
+      # image (1.82GB, CPU-only torch) plus the frontend's node build
+      # stage and nginx:alpine comfortably fit, but this makes actual
+      # usage visible in the log instead of assuming it.
+      - name: Available disk space (informational)
+        run: df -h /
+
+      - name: Build images
+        run: docker compose build
+
+      - name: Start stack
+        run: docker compose up -d
+
+      # /health does not load the NER pipeline (it's lazy-loaded only on
+      # a real analyze request, see turkish_ner.get_ner_pipeline), so
+      # this never triggers a Hugging Face model download. A short
+      # retry loop covers normal container startup time only.
+      - name: Wait for backend health
+        run: |
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://localhost:8000/health; then
+              echo
+              echo "backend healthy"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "backend did not become healthy within 60s" >&2
+          exit 1
+
+      - name: Smoke test frontend
+        run: curl --fail http://localhost:8080/
+
+      - name: Show container logs on failure
+        if: failure()
+        run: docker compose logs
+
+      # Runs even if a build/smoke step above failed, so containers
+      # never linger on the runner.
+      - name: Tear down
+        if: always()
+        run: docker compose down
