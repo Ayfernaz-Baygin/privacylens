@@ -1,3 +1,5 @@
+from html import escape
+
 import pymupdf
 import pytest
 
@@ -6,6 +8,9 @@ from backend.app.services.document_processing import (
     locate_finding_in_ocr_regions,
 )
 from backend.app.services.pdf_redactor import create_redacted_pdf
+from backend.app.services.sensitive_value_masking import (
+    mask_sensitive_value,
+)
 
 
 def _create_scanned_pdf(file_path):
@@ -82,6 +87,21 @@ def _bbox_dict(rectangle):
         "x1": rectangle.x1,
         "y1": rectangle.y1,
     }
+
+
+def _assert_masked_raster_area(pixels):
+    assert not any(
+        red > green + 30 and red > blue + 30
+        for red, green, blue in pixels
+    )
+    assert any(
+        red >= 245 and green >= 245 and blue >= 245
+        for red, green, blue in pixels
+    )
+    assert any(
+        red <= 100 and green <= 100 and blue <= 100
+        for red, green, blue in pixels
+    )
 
 
 def _create_hybrid_pdf(
@@ -221,6 +241,8 @@ def test_create_redacted_pdf_removes_text(tmp_path):
             "y0": rectangle.y0,
             "x1": rectangle.x1,
             "y1": rectangle.y1,
+            "start": 0,
+            "end": len("test@example.com"),
         }
 
     finally:
@@ -252,6 +274,7 @@ def test_create_redacted_pdf_removes_text(tmp_path):
         text = page.get_text()
 
         assert "test@example.com" not in text
+        assert page.search_for("t**t@e*****e.com")
 
     finally:
         redacted_document.close()
@@ -338,10 +361,8 @@ def test_create_redacted_pdf_removes_selected_scanned_image_pixels(
         )
 
         assert selected_pixels_before != selected_pixels_after
-        assert all(
-            red <= 5 and green <= 5 and blue <= 5
-            for red, green, blue in selected_pixels_after
-        )
+        _assert_masked_raster_area(selected_pixels_after)
+        assert redacted_page.search_for("S****T")
         assert unselected_pixels_after == unselected_pixels_before
         assert any(
             green > red and green > blue
@@ -438,10 +459,11 @@ def test_hybrid_pdf_selectively_redacts_native_and_ocr_findings(
             assert ocr_pixels_after == ocr_pixels_before
         else:
             assert ocr_pixels_after != ocr_pixels_before
-            assert all(
-                red <= 5 and green <= 5 and blue <= 5
-                for red, green, blue in ocr_pixels_after
-            )
+            _assert_masked_raster_area(ocr_pixels_after)
+            assert redacted_page.search_for("o*r@e*****e.com")
+
+        if not native_should_remain:
+            assert redacted_page.search_for("n****e@e*****e.com")
 
         assert control_pixels_after == control_pixels_before
     finally:
@@ -500,16 +522,196 @@ def test_hybrid_repeated_value_redacts_only_selected_occurrence(
     try:
         redacted_page = redacted_document[0]
         assert redacted_page.search_for(repeated_value)
-        assert all(
-            red <= 5 and green <= 5 and blue <= 5
-            for red, green, blue in _render_rgb_crop(
-                redacted_page,
-                ocr_box,
-            )
+        _assert_masked_raster_area(
+            _render_rgb_crop(redacted_page, ocr_box)
         )
+        assert redacted_page.search_for("s**e@e*****e.com")
         assert _render_rgb_crop(
             redacted_page,
             control_box,
         ) == control_pixels_before
+    finally:
+        redacted_document.close()
+
+
+@pytest.mark.parametrize(
+    ("value", "finding_type", "expected_mask"),
+    [
+        ("Ayse Yilmaz", "PERSON", "A**e Y****z"),
+        ("05321234567", "PHONE", "0*********7"),
+        ("12345678901", "TCKN", "***********"),
+    ],
+)
+def test_native_pdf_renders_type_specific_mask(
+    tmp_path,
+    value,
+    finding_type,
+    expected_mask,
+):
+    source_path = tmp_path / f"{finding_type}-source.pdf"
+    output_path = tmp_path / f"{finding_type}-redacted.pdf"
+
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_text((72, 72), value)
+    rectangle = page.search_for(value)[0]
+    document.save(source_path)
+    document.close()
+
+    create_redacted_pdf(
+        source_path,
+        output_path,
+        [
+            {
+                "type": finding_type,
+                "value": value,
+                "page_number": 1,
+                "bounding_boxes": [
+                    {
+                        **_bbox_dict(rectangle),
+                        "start": 0,
+                        "end": len(value),
+                    }
+                ],
+            }
+        ],
+    )
+
+    redacted_document = pymupdf.open(output_path)
+    try:
+        redacted_page = redacted_document[0]
+        assert not redacted_page.search_for(value)
+        assert redacted_page.search_for(expected_mask)
+    finally:
+        redacted_document.close()
+
+
+def test_multi_bbox_finding_renders_matching_mask_segments(tmp_path):
+    source_path = tmp_path / "multi-box-source.pdf"
+    output_path = tmp_path / "multi-box-redacted.pdf"
+    value = "Ayse Yilmaz"
+
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_text((72, 72), "Ayse")
+    page.insert_text((72, 100), "Yilmaz")
+    first_box = page.search_for("Ayse")[0]
+    second_box = page.search_for("Yilmaz")[0]
+    document.save(source_path)
+    document.close()
+
+    create_redacted_pdf(
+        source_path,
+        output_path,
+        [
+            {
+                "type": "PERSON",
+                "value": value,
+                "page_number": 1,
+                "bounding_boxes": [
+                    {
+                        **_bbox_dict(first_box),
+                        "start": 0,
+                        "end": 5,
+                    },
+                    {
+                        **_bbox_dict(second_box),
+                        "start": 5,
+                        "end": len(value),
+                    },
+                ],
+            }
+        ],
+    )
+
+    redacted_document = pymupdf.open(output_path)
+    try:
+        redacted_page = redacted_document[0]
+        assert not redacted_page.search_for("Ayse")
+        assert not redacted_page.search_for("Yilmaz")
+        assert redacted_page.search_for("A**e")
+        assert redacted_page.search_for("Y****z")
+    finally:
+        redacted_document.close()
+
+
+def test_legacy_bbox_without_offsets_uses_full_fail_safe_mask(tmp_path):
+    source_path = tmp_path / "legacy-source.pdf"
+    output_path = tmp_path / "legacy-redacted.pdf"
+    value = "SECRET"
+
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_text((72, 72), value)
+    rectangle = page.search_for(value)[0]
+    document.save(source_path)
+    document.close()
+
+    create_redacted_pdf(
+        source_path,
+        output_path,
+        [
+            {
+                "type": "PERSON",
+                "value": value,
+                "page_number": 1,
+                "bounding_boxes": [_bbox_dict(rectangle)],
+            }
+        ],
+    )
+
+    redacted_document = pymupdf.open(output_path)
+    try:
+        redacted_page = redacted_document[0]
+        assert not redacted_page.search_for(value)
+        assert redacted_page.search_for("******")
+    finally:
+        redacted_document.close()
+
+
+def test_native_pdf_masks_turkish_diacritics(tmp_path):
+    source_path = tmp_path / "turkish-source.pdf"
+    output_path = tmp_path / "turkish-redacted.pdf"
+    value = "Şükrü Öztürk"
+    expected_mask = mask_sensitive_value(value, "PERSON")
+
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_htmlbox(
+        pymupdf.Rect(72, 72, 300, 100),
+        f"<span>{escape(value)}</span>",
+        css=(
+            "* {font-family: sans-serif; font-size: 11pt; "
+            "color: black; white-space: pre;} body {margin: 0;}"
+        ),
+    )
+    rectangle = page.search_for(value)[0]
+    document.save(source_path)
+    document.close()
+
+    create_redacted_pdf(
+        source_path,
+        output_path,
+        [
+            {
+                "type": "PERSON",
+                "value": value,
+                "page_number": 1,
+                "bounding_boxes": [
+                    {
+                        **_bbox_dict(rectangle),
+                        "start": 0,
+                        "end": len(value),
+                    }
+                ],
+            }
+        ],
+    )
+
+    redacted_document = pymupdf.open(output_path)
+    try:
+        redacted_page = redacted_document[0]
+        assert not redacted_page.search_for(value)
+        assert redacted_page.search_for(expected_mask)
     finally:
         redacted_document.close()
