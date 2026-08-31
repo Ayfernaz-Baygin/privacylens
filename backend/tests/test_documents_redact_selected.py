@@ -77,7 +77,7 @@ def test_redact_selected_docx_auto_redacts_email(monkeypatch):
 
     assert "test@example.com" not in redacted_text
     assert "ile iletişime geçin." in redacted_text
-    assert "█" in redacted_text
+    assert "t**t@e*****e.com" in redacted_text
 
 
 def test_redact_selected_docx_keeps_unselected_review_finding(
@@ -217,6 +217,7 @@ def test_redact_selected_docx_removes_value_from_raw_xml(
         ).decode("utf-8")
 
     assert "ayfer.aycan@example.com" not in raw_xml
+    assert "a*********n@e*****e.com" in raw_xml
 
 
 def test_redact_selected_pdf_behavior_is_unchanged(monkeypatch):

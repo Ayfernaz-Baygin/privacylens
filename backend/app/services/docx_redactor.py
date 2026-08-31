@@ -6,8 +6,9 @@ from backend.app.services.docx_locator import (
     build_docx_run_index,
     locate_entity_runs,
 )
-
-REDACTION_CHARACTER = "█"
+from backend.app.services.sensitive_value_masking import (
+    mask_sensitive_value,
+)
 
 
 def _get_run(document, match: dict):
@@ -23,18 +24,31 @@ def _get_run(document, match: dict):
     return paragraph.runs[match["run_index"]]
 
 
-def _redact_run_text(
+def _apply_mask_to_run_text(
     run_text: str,
     match_start: int,
     match_end: int,
+    mask_slice: str,
 ) -> str:
-    redacted_length = match_end - match_start
+    replacement_length = match_end - match_start
 
-    return (
-        run_text[:match_start]
-        + REDACTION_CHARACTER * redacted_length
-        + run_text[match_end:]
-    )
+    if len(mask_slice) != replacement_length:
+        mask_slice = "*" * replacement_length
+
+    masked_characters = list(run_text)
+
+    for offset, replacement in enumerate(mask_slice):
+        run_offset = match_start + offset
+
+        if (
+            masked_characters[run_offset] == "*"
+            or replacement == "*"
+        ):
+            masked_characters[run_offset] = "*"
+        else:
+            masked_characters[run_offset] = replacement
+
+    return "".join(masked_characters)
 
 
 def create_redacted_docx(
@@ -46,19 +60,37 @@ def create_redacted_docx(
     run_index = build_docx_run_index(source_path)
 
     for finding in findings:
+        finding_start = finding["start"]
+        finding_end = finding["end"]
+        masked_value = mask_sensitive_value(
+            finding["value"],
+            finding["type"],
+        )
+
+        if len(masked_value) != finding_end - finding_start:
+            masked_value = "*" * (finding_end - finding_start)
+
         matches = locate_entity_runs(
             run_index,
-            finding["start"],
-            finding["end"],
+            finding_start,
+            finding_end,
         )
 
         for match in matches:
             run = _get_run(document, match)
+            overlap_start = (
+                match["run_start"] + match["match_start"]
+            )
+            relative_start = overlap_start - finding_start
+            relative_end = relative_start + (
+                match["match_end"] - match["match_start"]
+            )
 
-            run.text = _redact_run_text(
+            run.text = _apply_mask_to_run_text(
                 run.text,
                 match["match_start"],
                 match["match_end"],
+                masked_value[relative_start:relative_end],
             )
 
     document.save(output_path)
