@@ -93,7 +93,7 @@ Uploaded files are written to temporary server-side storage while they are being
 ## Known Limitations
 
 **PDF**
-- Scanned/image-only pages use OCR as a fallback only when their PDF text layer is empty
+- Scanned/image-only pages and hybrid native/raster pages use OCR fallback where needed
 - Form fields, annotations, and attachments may not be analyzed or redacted
 
 **DOCX** — currently reliable scope:
@@ -139,8 +139,8 @@ uvicorn backend.app.main:app --reload
 
 On Windows, local OCR requires Tesseract to be installed separately and
 available on `PATH`, with both the Turkish (`tur`) and English (`eng`)
-language data installed. OCR is invoked only for PDF pages whose text
-layer is empty.
+language data installed. OCR is invoked for text-layer-empty pages and
+uncovered raster content on hybrid native/image pages.
 
 **Frontend**
 

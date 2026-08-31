@@ -168,6 +168,55 @@ jobs:
               parsed_page["text"].strip(),
               email_finding["bounding_boxes"],
           )
+
+          hybrid_pdf_path = Path("/tmp/hybrid-ocr-ci-smoke.pdf")
+          hybrid_document = pymupdf.open()
+          hybrid_page = hybrid_document.new_page(width=500, height=300)
+          hybrid_page.insert_text(
+              (35, 45),
+              "native@example.com",
+              fontsize=18,
+          )
+          hybrid_page.insert_image(
+              pymupdf.Rect(20, 80, 480, 280),
+              stream=image_bytes,
+          )
+          assert "native@example.com" in hybrid_page.get_text("text")
+          hybrid_document.save(hybrid_pdf_path)
+          hybrid_document.close()
+
+          hybrid_parsed = extract_text_from_pdf(hybrid_pdf_path)
+          hybrid_parsed_page = hybrid_parsed["pages"][0]
+          assert hybrid_parsed_page["text_source"] == "hybrid"
+          assert "native@example.com" in hybrid_parsed_page["text"]
+          assert "test@example.com" in hybrid_parsed_page["text"]
+
+          hybrid_analysis = analyze_document_file(
+              pdf_path=hybrid_pdf_path,
+              docx_path=Path("/tmp/missing.docx"),
+              xlsx_path=Path("/tmp/missing.xlsx"),
+          )
+          hybrid_email_findings = [
+              finding
+              for finding in hybrid_analysis["findings"]
+              if finding["type"] == "EMAIL"
+          ]
+          assert {
+              finding["value"] for finding in hybrid_email_findings
+          } >= {"native@example.com", "test@example.com"}
+          assert all(
+              finding["bounding_boxes"]
+              for finding in hybrid_email_findings
+          )
+
+          print(
+              "Hybrid OCR smoke passed:",
+              hybrid_parsed_page["text"].strip(),
+              [
+                  finding["bounding_boxes"]
+                  for finding in hybrid_email_findings
+              ],
+          )
           PY
 
       - name: Show container logs on failure
