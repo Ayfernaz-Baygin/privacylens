@@ -83,7 +83,7 @@ def test_redact_selected_xlsx_auto_redacts_email(monkeypatch):
 
     assert "test@example.com" not in redacted_value
     assert "ile iletişime geçin." in redacted_value
-    assert "█" in redacted_value
+    assert "t**t@e*****e.com" in redacted_value
 
 
 def test_redact_selected_xlsx_keeps_unselected_review_finding(
@@ -210,7 +210,7 @@ def test_redact_selected_xlsx_redacts_finding_on_second_sheet(
         "test@example.com"
         not in redacted["İletişim"]["A1"].value
     )
-    assert "█" in redacted["İletişim"]["A1"].value
+    assert "t**t@e*****e.com" in redacted["İletişim"]["A1"].value
 
 
 def test_redact_selected_xlsx_response_content_type(monkeypatch):
@@ -303,6 +303,13 @@ def test_redact_selected_xlsx_removes_value_from_raw_zip_xml(
             )
 
             assert "ayfer.aycan@example.com" not in content
+
+        worksheet_xml = archive.read(
+            "xl/worksheets/sheet1.xml"
+        ).decode("utf-8")
+
+    assert "a*********n@e*****e.com" in worksheet_xml
+    assert "adresine yaz" in worksheet_xml
 
 
 def test_redact_selected_xlsx_formula_cell_fail_safe(monkeypatch):
@@ -415,7 +422,7 @@ def test_redact_selected_xlsx_formula_cell_fail_safe(monkeypatch):
 
     assert redacted_cell.data_type != "f"
     assert "=" not in redacted_cell.value
-    assert redacted_cell.value == "█" * len("Ayşe Yılmaz")
+    assert redacted_cell.value == "A**e Y****z"
 
     with zipfile.ZipFile(
         io.BytesIO(response.content)
@@ -425,6 +432,7 @@ def test_redact_selected_xlsx_formula_cell_fail_safe(monkeypatch):
         ).decode("utf-8")
 
     assert "Ayşe Yılmaz" not in raw_xml
+    assert "A**e Y****z" in raw_xml
     assert "A1&amp;" not in raw_xml
 
 

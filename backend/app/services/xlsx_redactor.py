@@ -7,42 +7,34 @@ from backend.app.services.xlsx_locator import (
     build_xlsx_cell_index,
     locate_entity_cells,
 )
-
-REDACTION_CHARACTER = "█"
-
-
-def _merge_spans(spans: list[tuple[int, int]]) -> list[tuple[int, int]]:
-    """Merges overlapping/adjacent (start, end) ranges into disjoint ones.
-
-    Several findings can land inside the same cell with overlapping
-    ranges; merging first means each character is redacted exactly
-    once, regardless of how many findings touched it.
-    """
-    merged = []
-
-    for start, end in sorted(spans):
-        if merged and start <= merged[-1][1]:
-            merged[-1] = (
-                merged[-1][0],
-                max(merged[-1][1], end),
-            )
-        else:
-            merged.append((start, end))
-
-    return merged
+from backend.app.services.sensitive_value_masking import (
+    mask_sensitive_value,
+)
 
 
-def _redact_spans(text: str, spans: list[tuple[int, int]]) -> str:
-    result = text
+def _apply_masks_to_cell(text: str, matches: list[dict]) -> str:
+    masked_characters = list(text)
 
-    for start, end in _merge_spans(spans):
-        result = (
-            result[:start]
-            + REDACTION_CHARACTER * (end - start)
-            + result[end:]
-        )
+    for match in matches:
+        match_start = match["match_start"]
+        match_end = match["match_end"]
+        mask_slice = match["mask_slice"]
 
-    return result
+        if len(mask_slice) != match_end - match_start:
+            mask_slice = "*" * (match_end - match_start)
+
+        for offset, replacement in enumerate(mask_slice):
+            cell_offset = match_start + offset
+
+            if (
+                masked_characters[cell_offset] == "*"
+                or replacement == "*"
+            ):
+                masked_characters[cell_offset] = "*"
+            else:
+                masked_characters[cell_offset] = replacement
+
+    return "".join(masked_characters)
 
 
 def _group_matches_by_cell(
@@ -52,9 +44,8 @@ def _group_matches_by_cell(
     """(sheet_name, coordinate) -> every cell match any finding produced.
 
     Grouping first (rather than mutating the workbook finding-by-finding)
-    is what lets a cell touched by several findings get redacted exactly
-    once, correctly, whether it's a plain cell (spans merged) or a
-    formula cell (whole-cell redaction is naturally idempotent).
+    lets all masks be combined against the original cell text. A star
+    contributed by any overlapping mask can therefore never be reopened.
     """
     pages_by_number = {
         page["page_number"]: page for page in index["pages"]
@@ -68,15 +59,39 @@ def _group_matches_by_cell(
         if page is None:
             continue
 
+        finding_start = finding["start"]
+        finding_end = finding["end"]
+        masked_value = mask_sensitive_value(
+            finding["value"],
+            finding["type"],
+        )
+
+        if len(masked_value) != finding_end - finding_start:
+            masked_value = "*" * (finding_end - finding_start)
+
         matches = locate_entity_cells(
             page,
-            finding["start"],
-            finding["end"],
+            finding_start,
+            finding_end,
         )
 
         for match in matches:
             key = (match["sheet_name"], match["coordinate"])
-            grouped[key].append(match)
+            overlap_start = (
+                match["cell_start"] + match["match_start"]
+            )
+            relative_start = overlap_start - finding_start
+            relative_end = relative_start + (
+                match["match_end"] - match["match_start"]
+            )
+            grouped[key].append(
+                {
+                    **match,
+                    "mask_slice": masked_value[
+                        relative_start:relative_end
+                    ],
+                }
+            )
 
     return grouped
 
@@ -86,21 +101,11 @@ def create_redacted_xlsx(
     output_path: Path,
     findings: list[dict],
 ) -> Path:
-    """Redacts the real workbook cells the locator maps findings to.
+    """Replace located values with masks while preserving workbook data.
 
-    Loaded with data_only=False so untouched formula cells keep their
-    formulas verbatim on save (data_only=True would flatten every
-    formula in the workbook to its cached value, not just the ones
-    being redacted). For a plain cell this is the same value the
-    detector saw, so match_start/match_end apply directly.
-
-    A formula cell is handled as a fail-safe whole-cell replacement:
-    match_start/match_end were computed against the cached *result*
-    text (data_only=True), which has no relationship to the formula
-    string itself (data_only=False) — applying those offsets to the
-    formula would corrupt it silently. Instead the entire cell becomes
-    REDACTION_CHARACTER repeated for the cached result's length, and the
-    formula is gone (assigning a plain string replaces it outright).
+    Formula matches are masked against their cached result. Assigning
+    that safe plain string removes the formula instead of applying
+    cached-result offsets to unrelated formula syntax.
     """
     index = build_xlsx_cell_index(source_path)
     matches_by_cell = _group_matches_by_cell(index, findings)
@@ -117,18 +122,7 @@ def create_redacted_xlsx(
             cell = workbook[sheet_name][coordinate]
             cell_text = matches[0]["cell_text"]
 
-            if matches[0]["is_formula"]:
-                cell.value = REDACTION_CHARACTER * len(
-                    cell_text
-                )
-                continue
-
-            spans = [
-                (match["match_start"], match["match_end"])
-                for match in matches
-            ]
-
-            cell.value = _redact_spans(cell_text, spans)
+            cell.value = _apply_masks_to_cell(cell_text, matches)
 
         workbook.save(output_path)
 

@@ -222,4 +222,4 @@ def test_redact_selected_xlsx_is_supported(monkeypatch):
     )
 
     assert "test@example.com" not in redacted.active["A1"].value
-    assert "█" in redacted.active["A1"].value
+    assert "t**t@e*****e.com" in redacted.active["A1"].value
