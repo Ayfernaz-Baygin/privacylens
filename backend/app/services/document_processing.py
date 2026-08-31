@@ -40,50 +40,77 @@ def locate_finding_in_ocr_regions(
     finding: dict,
     regions: list[dict],
 ) -> list[dict]:
-    finding_start = finding["start"]
-    finding_end = finding["end"]
-
-    return [
-        region["bbox"].copy()
-        for region in regions
-        if (
-            region["start"] < finding_end
-            and region["end"] > finding_start
-        )
-    ]
+    return _locate_finding_in_pdf_regions(finding, regions)
 
 
 def locate_finding_in_hybrid_regions(
     finding: dict,
     regions: list[dict],
 ) -> list[dict]:
+    return _locate_finding_in_pdf_regions(finding, regions)
+
+
+def _locate_finding_in_pdf_regions(
+    finding: dict,
+    regions: list[dict],
+) -> list[dict]:
     finding_start = finding["start"]
     finding_end = finding["end"]
-    bounding_boxes = []
-    seen_coordinates = set()
+    intersections = []
 
     for region in regions:
-        if not (
-            region["start"] < finding_end
-            and region["end"] > finding_start
-        ):
+        intersection_start = max(region["start"], finding_start)
+        intersection_end = min(region["end"], finding_end)
+
+        if intersection_start >= intersection_end:
             continue
 
-        bbox = region["bbox"]
+        intersections.append(
+            {
+                "absolute_start": intersection_start,
+                "absolute_end": intersection_end,
+                "bbox": region["bbox"],
+            }
+        )
+
+    intersections.sort(key=lambda item: item["absolute_start"])
+
+    for index, intersection in enumerate(intersections[:-1]):
+        next_start = intersections[index + 1]["absolute_start"]
+        intersection["absolute_end"] = next_start
+
+    if intersections:
+        intersections[0]["absolute_start"] = finding_start
+        intersections[-1]["absolute_end"] = finding_end
+
+    bounding_boxes_by_coordinates = {}
+
+    for intersection in intersections:
+        bbox = intersection["bbox"]
         coordinates = (
             bbox["x0"],
             bbox["y0"],
             bbox["x1"],
             bbox["y1"],
         )
+        relative_start = (
+            intersection["absolute_start"] - finding_start
+        )
+        relative_end = intersection["absolute_end"] - finding_start
+        existing = bounding_boxes_by_coordinates.get(coordinates)
 
-        if coordinates in seen_coordinates:
+        if existing is not None:
+            existing["start"] = min(existing["start"], relative_start)
+            existing["end"] = max(existing["end"], relative_end)
             continue
 
-        seen_coordinates.add(coordinates)
-        bounding_boxes.append(bbox.copy())
+        bounding_boxes_by_coordinates[coordinates] = {
+            **bbox,
+            "start": relative_start,
+            "end": relative_end,
+        }
 
-    return bounding_boxes
+    return list(bounding_boxes_by_coordinates.values())
 
 
 def analyze_document_file(
@@ -170,6 +197,9 @@ def analyze_document_file(
                         file_path=pdf_path,
                         page_number=page["page_number"],
                         value=finding["value"],
+                        finding_start=finding["start"],
+                        finding_end=finding["end"],
+                        page_text=page["text"],
                     )
             else:
                 finding["bounding_boxes"] = []

@@ -12,6 +12,13 @@ from backend.app.services.document_processing import (
     locate_finding_in_ocr_regions,
 )
 from backend.app.services.pdf_parser import PdfOcrError
+from backend.app.services.sensitive_value_masking import (
+    mask_sensitive_value,
+)
+
+
+def _box_with_offsets(box: dict, start: int, end: int) -> dict:
+    return {**box, "start": start, "end": end}
 
 
 def _no_ner(monkeypatch):
@@ -105,7 +112,14 @@ def test_ocr_finding_gets_intersecting_region_bbox(
     )
 
     assert result["findings"][0]["bounding_boxes"] == [
-        {"x0": 10, "y0": 20, "x1": 100, "y1": 32}
+        {
+            "x0": 10,
+            "y0": 20,
+            "x1": 100,
+            "y1": 32,
+            "start": 0,
+            "end": 16,
+        }
     ]
 
 
@@ -131,7 +145,7 @@ def test_repeated_ocr_text_only_matches_finding_occurrence():
         ],
     )
 
-    assert boxes == [second_box]
+    assert boxes == [_box_with_offsets(second_box, 0, 16)]
 
 
 def test_ocr_finding_can_span_multiple_regions():
@@ -154,8 +168,22 @@ def test_ocr_finding_can_span_multiple_regions():
     )
 
     assert boxes == [
-        {"x0": 1, "y0": 2, "x1": 3, "y1": 4},
-        {"x0": 5, "y0": 6, "x1": 7, "y1": 8},
+        {
+            "x0": 1,
+            "y0": 2,
+            "x1": 3,
+            "y1": 4,
+            "start": 0,
+            "end": 2,
+        },
+        {
+            "x0": 5,
+            "y0": 6,
+            "x1": 7,
+            "y1": 8,
+            "start": 2,
+            "end": 9,
+        },
     ]
 
 
@@ -213,7 +241,9 @@ def test_hybrid_native_region_finding_gets_correct_bbox(
         },
     )
 
-    assert result["findings"][0]["bounding_boxes"] == [native_box]
+    assert result["findings"][0]["bounding_boxes"] == [
+        _box_with_offsets(native_box, 0, 18)
+    ]
 
 
 def test_hybrid_ocr_region_finding_gets_correct_bbox(
@@ -270,7 +300,9 @@ def test_hybrid_ocr_region_finding_gets_correct_bbox(
         },
     )
 
-    assert result["findings"][0]["bounding_boxes"] == [ocr_box]
+    assert result["findings"][0]["bounding_boxes"] == [
+        _box_with_offsets(ocr_box, 0, 15)
+    ]
 
 
 def test_hybrid_finding_can_span_native_and_ocr_regions():
@@ -293,8 +325,22 @@ def test_hybrid_finding_can_span_native_and_ocr_regions():
     )
 
     assert boxes == [
-        {"x0": 1, "y0": 2, "x1": 3, "y1": 4},
-        {"x0": 5, "y0": 6, "x1": 7, "y1": 8},
+        {
+            "x0": 1,
+            "y0": 2,
+            "x1": 3,
+            "y1": 4,
+            "start": 0,
+            "end": 2,
+        },
+        {
+            "x0": 5,
+            "y0": 6,
+            "x1": 7,
+            "y1": 8,
+            "start": 2,
+            "end": 9,
+        },
     ]
 
 
@@ -319,7 +365,7 @@ def test_hybrid_mapping_deduplicates_identical_bboxes():
         ],
     )
 
-    assert boxes == [duplicate_box]
+    assert boxes == [_box_with_offsets(duplicate_box, 0, 10)]
 
 
 def test_hybrid_repeated_text_only_maps_finding_occurrence():
@@ -346,7 +392,7 @@ def test_hybrid_repeated_text_only_maps_finding_occurrence():
         ],
     )
 
-    assert boxes == [second_box]
+    assert boxes == [_box_with_offsets(second_box, 0, 16)]
 
 
 def test_native_pdf_still_uses_pdf_locator(tmp_path, monkeypatch):
@@ -383,6 +429,9 @@ def test_native_pdf_still_uses_pdf_locator(tmp_path, monkeypatch):
     assert result["findings"][0]["bounding_boxes"] == [expected_box]
     assert calls[0]["page_number"] == 1
     assert calls[0]["value"] == "test@example.com"
+    assert calls[0]["finding_start"] == 0
+    assert calls[0]["finding_end"] == 16
+    assert calls[0]["page_text"] == "test@example.com"
 
 
 def test_mixed_pdf_uses_native_ocr_and_hybrid_mapping(
@@ -467,8 +516,36 @@ def test_mixed_pdf_uses_native_ocr_and_hybrid_mapping(
 
     assert locator_pages == [1]
     assert result["findings"][0]["bounding_boxes"] == [native_box]
-    assert result["findings"][1]["bounding_boxes"] == [ocr_box]
-    assert result["findings"][2]["bounding_boxes"] == [hybrid_box]
+    assert result["findings"][1]["bounding_boxes"] == [
+        _box_with_offsets(ocr_box, 0, 15)
+    ]
+    assert result["findings"][2]["bounding_boxes"] == [
+        _box_with_offsets(hybrid_box, 0, 18)
+    ]
+
+
+def test_pdf_region_offsets_reconstruct_the_complete_mask():
+    value = "Ayşe Yılmaz"
+    mask = mask_sensitive_value(value, "PERSON")
+    boxes = locate_finding_in_hybrid_regions(
+        finding={"start": 10, "end": 21},
+        regions=[
+            {
+                "start": 10,
+                "end": 14,
+                "source": "native",
+                "bbox": {"x0": 1, "y0": 2, "x1": 3, "y1": 4},
+            },
+            {
+                "start": 15,
+                "end": 21,
+                "source": "ocr",
+                "bbox": {"x0": 5, "y0": 6, "x1": 7, "y1": 8},
+            },
+        ],
+    )
+
+    assert "".join(mask[box["start"]:box["end"]] for box in boxes) == mask
 
 
 def test_analyze_document_file_uses_pdf_and_locates_boxes(

@@ -471,8 +471,12 @@ def test_hybrid_repeated_value_redacts_only_selected_occurrence(
 
     assert len(analysis["findings"]) == 2
     native_finding, ocr_finding = analysis["findings"]
-    assert native_finding["bounding_boxes"] == [_bbox_dict(native_box)]
-    assert ocr_finding["bounding_boxes"] == [_bbox_dict(ocr_box)]
+    assert native_finding["bounding_boxes"] == [
+        {**_bbox_dict(native_box), "start": 0, "end": 16}
+    ]
+    assert ocr_finding["bounding_boxes"] == [
+        {**_bbox_dict(ocr_box), "start": 0, "end": 16}
+    ]
 
     source_document = pymupdf.open(source_path)
 
