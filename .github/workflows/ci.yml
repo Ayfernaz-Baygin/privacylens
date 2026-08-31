@@ -95,6 +95,81 @@ jobs:
       - name: Smoke test frontend
         run: curl --fail http://localhost:8080/
 
+      - name: Smoke test real OCR pipeline
+        run: |
+          docker compose exec -T backend sh -eu -c '
+            languages="$(tesseract --list-langs 2>&1)"
+            printf "%s\n" "$languages"
+            printf "%s\n" "$languages" | grep -qx eng
+            printf "%s\n" "$languages" | grep -qx tur
+          '
+          docker compose exec -T \
+            -e HF_HUB_OFFLINE=1 \
+            -e TRANSFORMERS_OFFLINE=1 \
+            backend python - <<'PY'
+          from pathlib import Path
+
+          import pymupdf
+
+          from backend.app.services import detection_engine
+          from backend.app.services.document_processing import (
+              analyze_document_file,
+          )
+          from backend.app.services.pdf_parser import extract_text_from_pdf
+
+
+          pdf_path = Path("/tmp/ocr-ci-smoke.pdf")
+
+          image_document = pymupdf.open()
+          image_page = image_document.new_page(width=500, height=180)
+          image_page.insert_text(
+              (45, 95),
+              "test@example.com",
+              fontsize=32,
+              color=(0, 0, 0),
+          )
+          image_bytes = image_page.get_pixmap(
+              matrix=pymupdf.Matrix(3, 3),
+              alpha=False,
+          ).tobytes("png")
+          image_document.close()
+
+          scanned_document = pymupdf.open()
+          scanned_page = scanned_document.new_page(width=500, height=180)
+          scanned_page.insert_image(scanned_page.rect, stream=image_bytes)
+          assert scanned_page.get_text("text").strip() == ""
+          scanned_document.save(pdf_path)
+          scanned_document.close()
+
+          parsed = extract_text_from_pdf(pdf_path)
+          parsed_page = parsed["pages"][0]
+          assert parsed_page["text_source"] == "ocr"
+          assert "test@example.com" in parsed_page["text"]
+
+          # Keep this smoke check offline: EMAIL is rule-based, so the
+          # Hugging Face NER model must not be loaded or downloaded.
+          detection_engine.detect_named_entities = lambda text: []
+
+          analysis = analyze_document_file(
+              pdf_path=pdf_path,
+              docx_path=Path("/tmp/missing.docx"),
+              xlsx_path=Path("/tmp/missing.xlsx"),
+          )
+          email_finding = next(
+              finding
+              for finding in analysis["findings"]
+              if finding["type"] == "EMAIL"
+          )
+          assert email_finding["value"] == "test@example.com"
+          assert email_finding["bounding_boxes"]
+
+          print(
+              "OCR smoke passed:",
+              parsed_page["text"].strip(),
+              email_finding["bounding_boxes"],
+          )
+          PY
+
       - name: Show container logs on failure
         if: failure()
         run: docker compose logs
