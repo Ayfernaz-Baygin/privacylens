@@ -182,15 +182,15 @@ See `frontend/.env.example` and `backend/.env.example` for reference (non-secret
 python -m pytest
 ```
 
-This is the default fast suite; `pytest.ini` excludes `slow`-marked tests from it automatically. Currently: 293 passed, 2 deselected.
+This is the default fast suite; `pytest.ini` excludes `slow`-marked tests from it automatically. Currently: 294 passed, 2 deselected.
 
 ```
 python -m pytest -m slow
 ```
 
-Runs the 2 tests excluded above: a real integration check against the actual pinned Hugging Face Turkish NER model (no mocking). Currently: 2 passed, 293 deselected. These use the model pinned in `backend/app/services/turkish_ner.py`; if it isn't already in the local Hugging Face cache, the first run may need to download it.
+Runs the 2 tests excluded above: a real integration check against the actual pinned Hugging Face Turkish NER model (no mocking). Currently: 2 passed, 294 deselected. These use the model pinned in `backend/app/services/turkish_ner.py`; if it isn't already in the local Hugging Face cache, the first run may need to download it.
 
-293 fast + 2 slow = 295 tests total.
+294 fast + 2 slow = 296 tests total.
 
 **Frontend**
 
