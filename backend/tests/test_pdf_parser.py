@@ -2,6 +2,7 @@ import pytest
 
 from backend.app.services.pdf_parser import (
     PdfOcrError,
+    classify_pdf_page,
     extract_text_from_pdf,
 )
 
@@ -24,11 +25,18 @@ class FakeDocument:
 class NativePage:
     def __init__(self):
         self.ocr_called = False
+        self.rect = (0, 0, 100, 100)
 
     def get_text(self, output, **kwargs):
-        assert output == "text"
-        assert kwargs == {}
-        return "Email: test@example.com\n"
+        if output == "text":
+            assert kwargs == {}
+            return "Email: test@example.com\n"
+
+        assert output == "words"
+        return []
+
+    def get_image_info(self):
+        return []
 
     def get_textpage_ocr(self, **kwargs):
         self.ocr_called = True
@@ -81,6 +89,18 @@ class OcrPage:
         return self.text_page
 
 
+class HybridPage(NativePage):
+    def get_text(self, output, **kwargs):
+        if output == "text":
+            return "Header\n"
+
+        assert output == "words"
+        return [(0, 0, 100, 10, "Header")]
+
+    def get_image_info(self):
+        return [{"bbox": (0, 20, 100, 100)}]
+
+
 class FailingOcrPage:
     def get_text(self, output, **kwargs):
         assert output == "text"
@@ -88,6 +108,85 @@ class FailingOcrPage:
 
     def get_textpage_ocr(self, **kwargs):
         raise RuntimeError("No OCR support: TESSDATA_PREFIX not set")
+
+
+class ClassificationPage:
+    def __init__(self, rect, images=None, words=None):
+        self.rect = rect
+        self.images = images or []
+        self.words = words or []
+
+    def get_image_info(self):
+        return self.images
+
+    def get_text(self, output):
+        assert output == "words"
+        return self.words
+
+
+def test_empty_text_is_classified_as_ocr():
+    page = ClassificationPage(
+        rect=(0, 0, 100, 100),
+        images=[{"bbox": (0, 0, 100, 100)}],
+    )
+
+    assert classify_pdf_page(page, " \n") == "ocr"
+
+
+def test_native_text_without_image_is_classified_as_native():
+    page = ClassificationPage(rect=(0, 0, 100, 100))
+
+    assert classify_pdf_page(page, "Native text") == "native"
+
+
+def test_native_text_with_small_image_is_classified_as_native():
+    page = ClassificationPage(
+        rect=(0, 0, 100, 100),
+        images=[{"bbox": (0, 0, 40, 40)}],
+    )
+
+    assert classify_pdf_page(page, "Native text") == "native"
+
+
+def test_native_text_with_large_uncovered_image_is_hybrid():
+    page = ClassificationPage(
+        rect=(0, 0, 100, 100),
+        images=[{"bbox": (0, 20, 100, 100)}],
+        words=[(0, 0, 100, 10, "Header")],
+    )
+
+    assert classify_pdf_page(page, "Header") == "hybrid"
+
+
+def test_large_image_with_enough_native_coverage_is_native():
+    page = ClassificationPage(
+        rect=(0, 0, 100, 100),
+        images=[{"bbox": (0, 0, 100, 100)}],
+        words=[(10, 10, 40, 30, "Covered")],
+    )
+
+    assert classify_pdf_page(page, "Covered") == "native"
+
+
+@pytest.mark.parametrize(
+    ("page_rect", "image_bbox"),
+    [
+        ((0, 0, 0, 100), (0, 0, 100, 100)),
+        ((0, 0, 100, 100), (20, 20, 20, 80)),
+        ((0, 0, 100, 100), (80, 80, 20, 20)),
+        ((0, 0, 100, 100), (0, 0)),
+    ],
+)
+def test_invalid_or_zero_area_bboxes_are_safe(
+    page_rect,
+    image_bbox,
+):
+    page = ClassificationPage(
+        rect=page_rect,
+        images=[{"bbox": image_bbox}],
+    )
+
+    assert classify_pdf_page(page, "Native text") == "native"
 
 
 def test_native_page_does_not_call_ocr(monkeypatch):
@@ -113,6 +212,25 @@ def test_native_page_does_not_call_ocr(monkeypatch):
         ],
     }
     assert document.closed is True
+
+
+def test_hybrid_page_is_classified_without_running_ocr(monkeypatch):
+    page = HybridPage()
+    document = FakeDocument([page])
+    monkeypatch.setattr(
+        "backend.app.services.pdf_parser.pymupdf.open",
+        lambda file_path: document,
+    )
+
+    result = extract_text_from_pdf("hybrid.pdf")
+
+    assert page.ocr_called is False
+    assert result["pages"][0] == {
+        "page_number": 1,
+        "text": "Header\n",
+        "text_source": "hybrid",
+        "regions": [],
+    }
 
 
 def test_empty_page_uses_ocr_fallback(monkeypatch):
