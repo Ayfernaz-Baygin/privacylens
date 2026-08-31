@@ -6,6 +6,24 @@ FROM python:3.13-slim
 WORKDIR /app
 
 COPY backend/requirements.txt backend/requirements.txt
+
+# PrivacyLens runs Turkish NER on CPU only (turkish_ner.py pins
+# device=-1, no GPU code path exists), but PyPI's default `torch`
+# wheel bundles the full CUDA/NVIDIA runtime (~3.4GB of unused
+# nvidia-*/triton packages). Installing the official CPU-only build
+# FIRST, from PyTorch's own CPU wheel index, avoids that entirely --
+# verified this exact wheel exists for the pinned version/Python/
+# platform (torch-2.13.0+cpu-cp313-cp313-manylinux_2_28_x86_64.whl).
+#
+# requirements.txt is untouched and still lists plain `torch==2.13.0`
+# (needed for identical local-dev/CI installs): pip's version matching
+# treats an already-installed `2.13.0+cpu` as satisfying that plain
+# `==2.13.0` requirement (verified -- "Requirement already satisfied"),
+# so the second install step below does not reinstall the GPU build
+# over this one.
+RUN pip install --no-cache-dir torch==2.13.0+cpu \
+    --index-url https://download.pytorch.org/whl/cpu
+
 RUN pip install --no-cache-dir -r backend/requirements.txt
 
 COPY backend/ backend/
