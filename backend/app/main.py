@@ -52,7 +52,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="PrivacyLens API",
     description="Sensitive data detection and document redaction API",
-    version="0.2.0",
+    version="0.3.0",
     lifespan=lifespan,
 )
 
@@ -72,7 +72,7 @@ app.include_router(documents_router)
 def root():
     return {
         "name": "PrivacyLens API",
-        "version": "0.2.0",
+        "version": "0.3.0",
     }
 
 
