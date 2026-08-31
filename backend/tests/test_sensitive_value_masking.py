@@ -79,6 +79,38 @@ def test_masks_email_structure(value, expected):
     assert mask_sensitive_value(value, "EMAIL") == expected
 
 
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (
+            "ayse.yilmaz@gmail.com",
+            "a*********z@gmail.com",
+        ),
+        (
+            "mehmet123@outlook.com",
+            "m*******3@outlook.com",
+        ),
+        (
+            "ayse.yilmaz@hotmail.com",
+            "a*********z@hotmail.com",
+        ),
+        (
+            "ayse@abc-teknoloji.com",
+            "a**e@a***********i.com",
+        ),
+        (
+            "ayse.yilmaz@Gmail.com",
+            "a*********z@Gmail.com",
+        ),
+    ],
+)
+def test_masks_email_keeps_known_public_domains_visible(
+    value,
+    expected,
+):
+    assert mask_sensitive_value(value, "EMAIL") == expected
+
+
 def test_malformed_email_is_fully_masked():
     value = "not-an-email"
 

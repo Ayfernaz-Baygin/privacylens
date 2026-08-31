@@ -16,6 +16,17 @@ IDENTIFIER_TYPES = {
 EMAIL_LOCAL_PATTERN = re.compile(r"[A-Za-z0-9._%+-]+")
 EMAIL_DOMAIN_LABEL_PATTERN = re.compile(r"[A-Za-z0-9-]+")
 
+PUBLIC_EMAIL_DOMAINS = {
+    "gmail.com",
+    "outlook.com",
+    "hotmail.com",
+    "yahoo.com",
+    "icloud.com",
+    "yandex.com",
+    "proton.me",
+    "protonmail.com",
+}
+
 
 def _mask_short_part(part: str) -> str:
     if len(part) <= 2:
@@ -83,6 +94,10 @@ def _mask_email(value: str) -> str:
         return "*" * len(value)
 
     local_part, domain = value.split("@")
+
+    if domain.lower() in PUBLIC_EMAIL_DOMAINS:
+        return _mask_short_part(local_part) + "@" + domain
+
     domain_labels = domain.split(".")
     masked_domain_labels = [
         _mask_short_part(label)
