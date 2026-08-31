@@ -93,7 +93,7 @@ Uploaded files are written to temporary server-side storage while they are being
 ## Known Limitations
 
 **PDF**
-- Scanned/image-only PDFs require OCR, which is not currently implemented — text must be extractable from the PDF itself
+- Scanned/image-only pages use OCR as a fallback only when their PDF text layer is empty
 - Form fields, annotations, and attachments may not be analyzed or redacted
 
 **DOCX** — currently reliable scope:
@@ -137,6 +137,11 @@ pip install -r backend/requirements.txt
 uvicorn backend.app.main:app --reload
 ```
 
+On Windows, local OCR requires Tesseract to be installed separately and
+available on `PATH`, with both the Turkish (`tur`) and English (`eng`)
+language data installed. OCR is invoked only for PDF pages whose text
+layer is empty.
+
 **Frontend**
 
 ```
@@ -155,6 +160,9 @@ docker compose up --build
 - Frontend: [http://localhost:8080](http://localhost:8080)
 
 Uses `compose.yaml` at the repo root; the native `python`/`uvicorn` and `npm run dev` workflows above still work independently of this. The frontend's port is 8080 (not 5173) so it doesn't collide with `npm run dev` running at the same time. The Turkish NER model is not downloaded at build time — only on first real analysis request, and is cached in a named volume across container restarts.
+
+The backend Docker image includes Tesseract and the `tur`/`eng` language
+data, so no separate OCR installation is needed when using Docker.
 
 ### Configuration (optional)
 
@@ -219,7 +227,6 @@ frontend/
 
 The following are not implemented yet:
 
-- OCR for scanned/image-only PDFs
 - Broader DOCX/XLSX structure coverage (headers/footers, comments, text boxes, etc.)
 - Authentication / authorization
 - Containerization

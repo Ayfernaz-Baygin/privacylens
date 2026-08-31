@@ -7,6 +7,16 @@ WORKDIR /app
 
 COPY backend/requirements.txt backend/requirements.txt
 
+# PyMuPDF invokes the Tesseract executable directly for scanned PDF
+# pages. Keep the engine and the two configured language data sets in
+# the runtime image; no Python OCR wrapper is needed.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        tesseract-ocr \
+        tesseract-ocr-eng \
+        tesseract-ocr-tur \
+    && rm -rf /var/lib/apt/lists/*
+
 # PrivacyLens runs Turkish NER on CPU only (turkish_ner.py pins
 # device=-1, no GPU code path exists), but PyPI's default `torch`
 # wheel bundles the full CUDA/NVIDIA runtime (~3.4GB of unused
