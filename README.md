@@ -1,5 +1,7 @@
 # PrivacyLens
 
+[![CI](https://github.com/Ayfernaz-Baygin/privacylens/actions/workflows/ci.yml/badge.svg)](https://github.com/Ayfernaz-Baygin/privacylens/actions/workflows/ci.yml)
+
 PrivacyLens is an AI-assisted document privacy platform that detects, reviews and securely redacts sensitive information from PDF, DOCX and XLSX documents. Detection combines rule-based validation (email, phone, national ID, IBAN, card numbers) with a Turkish named-entity recognition model (person, location, organization) — it is not a single "AI does everything" pipeline.
 
 ## Why PrivacyLens?
