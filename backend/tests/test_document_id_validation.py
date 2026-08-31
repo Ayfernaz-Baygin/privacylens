@@ -73,7 +73,7 @@ def test_validate_document_id_never_touches_the_filesystem(
 
 @pytest.mark.parametrize(
     "endpoint",
-    ["text", "analyze", "highlight", "redact"],
+    ["text", "analyze"],
 )
 def test_get_endpoints_reject_malformed_document_id(endpoint):
     client = TestClient(app)

@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
 
 from backend.app.config import get_upload_root
-from backend.app.services.detection_engine import detect_sensitive_data
 from backend.app.services.document_cleanup import (
     delete_document_directory,
 )
@@ -15,7 +14,6 @@ from backend.app.services.document_processing import (
     DocumentParseError,
     UnsupportedDocumentFormatError,
     analyze_document_file,
-    build_finding_id,
 )
 from backend.app.services.docx_parser import extract_text_from_docx
 from backend.app.services.docx_redactor import create_redacted_docx
@@ -23,12 +21,9 @@ from backend.app.services.file_validation import (
     validate_file_content,
     validate_safe_office_zip,
 )
-from backend.app.services.pdf_highlighter import create_highlighted_pdf
-from backend.app.services.pdf_locator import locate_text_in_pdf
 from backend.app.services.pdf_parser import extract_text_from_pdf
 from backend.app.services.pdf_redactor import create_redacted_pdf
 from backend.app.services.redaction_decision import (
-    filter_auto_redact_findings,
     select_redaction_findings,
 )
 from backend.app.services.xlsx_parser import extract_text_from_xlsx
@@ -419,224 +414,6 @@ def analyze_document(
         ),
         "findings": analysis["findings"],
     }
-
-
-@router.get("/{document_id}/highlight")
-def highlight_document(
-    document_id: str,
-):
-    validate_document_id(document_id)
-
-    document_directory = (
-        UPLOAD_ROOT / document_id
-    )
-
-    pdf_path = (
-        document_directory
-        / "source.pdf"
-    )
-
-    highlighted_path = (
-        document_directory
-        / "highlighted.pdf"
-    )
-
-    if not document_directory.exists():
-        raise HTTPException(
-            status_code=404,
-            detail="Belge bulunamadı.",
-        )
-
-    if not pdf_path.exists():
-        raise HTTPException(
-            status_code=415,
-            detail=(
-                "Highlight işlemi yalnızca "
-                "PDF dosyalarını destekliyor."
-            ),
-        )
-
-    try:
-        parsed_document = (
-            extract_text_from_pdf(
-                pdf_path
-            )
-        )
-
-    except Exception:
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "PDF dosyası "
-                "analiz edilemedi."
-            ),
-        )
-
-    findings = []
-
-    for page in parsed_document["pages"]:
-        page_findings = detect_sensitive_data(
-            text=page["text"],
-            page_number=page["page_number"],
-            include_ner=True,
-        )
-
-        for finding in page_findings:
-            bounding_boxes = locate_text_in_pdf(
-                file_path=pdf_path,
-                page_number=page["page_number"],
-                value=finding["value"],
-            )
-
-            finding["bounding_boxes"] = (
-                bounding_boxes
-            )
-
-            finding["finding_id"] = (
-                build_finding_id(
-                    finding
-                )
-            )
-
-        findings.extend(
-            page_findings
-        )
-
-    if not findings:
-        raise HTTPException(
-            status_code=404,
-            detail=(
-                "Highlight edilecek "
-                "hassas veri bulunamadı."
-            ),
-        )
-
-    create_highlighted_pdf(
-        source_path=pdf_path,
-        output_path=highlighted_path,
-        findings=findings,
-    )
-
-    return FileResponse(
-        path=highlighted_path,
-        media_type="application/pdf",
-        filename=(
-            "privacylens-highlighted-"
-            f"{document_id}.pdf"
-        ),
-    )
-
-
-@router.get("/{document_id}/redact")
-def redact_document(
-    document_id: str,
-):
-    validate_document_id(document_id)
-
-    document_directory = (
-        UPLOAD_ROOT / document_id
-    )
-
-    pdf_path = (
-        document_directory
-        / "source.pdf"
-    )
-
-    redacted_path = (
-        document_directory
-        / "redacted.pdf"
-    )
-
-    if not document_directory.exists():
-        raise HTTPException(
-            status_code=404,
-            detail="Belge bulunamadı.",
-        )
-
-    if not pdf_path.exists():
-        raise HTTPException(
-            status_code=415,
-            detail=(
-                "Redaction işlemi yalnızca "
-                "PDF dosyalarını destekliyor."
-            ),
-        )
-
-    try:
-        parsed_document = (
-            extract_text_from_pdf(
-                pdf_path
-            )
-        )
-
-    except Exception:
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "PDF dosyası "
-                "analiz edilemedi."
-            ),
-        )
-
-    findings = []
-
-    for page in parsed_document["pages"]:
-        page_findings = detect_sensitive_data(
-            text=page["text"],
-            page_number=page["page_number"],
-            include_ner=True,
-        )
-
-        for finding in page_findings:
-            bounding_boxes = locate_text_in_pdf(
-                file_path=pdf_path,
-                page_number=page["page_number"],
-                value=finding["value"],
-            )
-
-            finding["bounding_boxes"] = (
-                bounding_boxes
-            )
-
-            finding["finding_id"] = (
-                build_finding_id(
-                    finding
-                )
-            )
-
-        findings.extend(
-            page_findings
-        )
-
-    auto_redact_findings = (
-        filter_auto_redact_findings(
-            findings
-        )
-    )
-
-    if not auto_redact_findings:
-        raise HTTPException(
-            status_code=404,
-            detail=(
-                "Otomatik maskelenecek "
-                "hassas veri bulunamadı."
-            ),
-        )
-
-    create_redacted_pdf(
-        source_path=pdf_path,
-        output_path=redacted_path,
-        findings=auto_redact_findings,
-    )
-
-    return FileResponse(
-        path=redacted_path,
-        media_type="application/pdf",
-        filename=(
-            "privacylens-redacted-"
-            f"{document_id}.pdf"
-        ),
-    )
 
 
 @router.post(
