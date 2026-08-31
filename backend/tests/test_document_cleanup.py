@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from backend.app import main as main_module
 from backend.app.main import app
-from backend.app.routes.documents import UPLOAD_ROOT
+from backend.app.routes import documents as documents_module
 from backend.app.services.document_cleanup import (
     cleanup_stale_documents,
     delete_document_directory,
@@ -143,7 +143,7 @@ def test_delete_endpoint_removes_valid_document():
     )
 
     assert response.status_code == 204
-    assert not (UPLOAD_ROOT / document_id).exists()
+    assert not (documents_module.UPLOAD_ROOT / document_id).exists()
 
 
 def test_delete_endpoint_returns_404_for_unknown_valid_uuid():
@@ -192,7 +192,7 @@ def test_redact_selected_pdf_cleans_up_directory_after_response(
         client, "sample.pdf", _real_pdf_bytes(), PDF_CONTENT_TYPE
     )
 
-    assert (UPLOAD_ROOT / document_id).exists()
+    assert (documents_module.UPLOAD_ROOT / document_id).exists()
 
     response = client.post(
         f"/api/documents/{document_id}/redact-selected",
@@ -203,7 +203,7 @@ def test_redact_selected_pdf_cleans_up_directory_after_response(
     assert response.headers["content-type"] == "application/pdf"
     assert len(response.content) > 0
 
-    assert not (UPLOAD_ROOT / document_id).exists()
+    assert not (documents_module.UPLOAD_ROOT / document_id).exists()
 
 
 def test_redact_selected_docx_cleans_up_directory_after_response(
@@ -217,7 +217,7 @@ def test_redact_selected_docx_cleans_up_directory_after_response(
         client, "sample.docx", _real_docx_bytes(), DOCX_CONTENT_TYPE
     )
 
-    assert (UPLOAD_ROOT / document_id).exists()
+    assert (documents_module.UPLOAD_ROOT / document_id).exists()
 
     response = client.post(
         f"/api/documents/{document_id}/redact-selected",
@@ -229,7 +229,7 @@ def test_redact_selected_docx_cleans_up_directory_after_response(
     redacted_document = docx.Document(io.BytesIO(response.content))
     assert "test@example.com" not in redacted_document.paragraphs[0].text
 
-    assert not (UPLOAD_ROOT / document_id).exists()
+    assert not (documents_module.UPLOAD_ROOT / document_id).exists()
 
 
 def test_redact_selected_xlsx_cleans_up_directory_after_response(
@@ -243,7 +243,7 @@ def test_redact_selected_xlsx_cleans_up_directory_after_response(
         client, "sample.xlsx", _real_xlsx_bytes(), XLSX_CONTENT_TYPE
     )
 
-    assert (UPLOAD_ROOT / document_id).exists()
+    assert (documents_module.UPLOAD_ROOT / document_id).exists()
 
     response = client.post(
         f"/api/documents/{document_id}/redact-selected",
@@ -255,7 +255,7 @@ def test_redact_selected_xlsx_cleans_up_directory_after_response(
     redacted = openpyxl.load_workbook(io.BytesIO(response.content))
     assert "test@example.com" not in redacted.active["A1"].value
 
-    assert not (UPLOAD_ROOT / document_id).exists()
+    assert not (documents_module.UPLOAD_ROOT / document_id).exists()
 
 
 # --- cleanup_stale_documents (TTL sweep) ---------------------------------
@@ -368,7 +368,7 @@ def test_periodic_cleanup_task_removes_stale_directory(monkeypatch):
         # one-shot startup sweep), so only the periodic loop -- not
         # lifespan startup -- can be what removes it.
         document_id = str(uuid.uuid4())
-        target = UPLOAD_ROOT / document_id
+        target = documents_module.UPLOAD_ROOT / document_id
         target.mkdir(parents=True, exist_ok=True)
         (target / "source.pdf").write_bytes(b"data")
 

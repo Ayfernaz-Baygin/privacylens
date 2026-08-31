@@ -7,7 +7,7 @@ import pymupdf
 from fastapi.testclient import TestClient
 
 from backend.app.main import app
-from backend.app.routes.documents import UPLOAD_ROOT
+from backend.app.routes import documents as documents_module
 from backend.app.services import file_validation
 
 PDF_CONTENT_TYPE = "application/pdf"
@@ -89,12 +89,14 @@ def _upload(client, filename, content, content_type):
 
 
 def _existing_document_ids():
-    if not UPLOAD_ROOT.exists():
+    upload_root = documents_module.UPLOAD_ROOT
+
+    if not upload_root.exists():
         return set()
 
     return {
         entry.name
-        for entry in UPLOAD_ROOT.iterdir()
+        for entry in upload_root.iterdir()
         if entry.is_dir()
     }
 
