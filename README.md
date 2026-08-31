@@ -229,8 +229,6 @@ The following are not implemented yet:
 
 - Broader DOCX/XLSX structure coverage (headers/footers, comments, text boxes, etc.)
 - Authentication / authorization
-- Containerization
-- CI pipeline
 - Optional persistent metadata/database
 - Richer NER evaluation and model monitoring
 
