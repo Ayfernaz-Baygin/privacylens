@@ -163,6 +163,8 @@ python -m pytest
 
 204 automated tests currently pass.
 
+The Turkish NER model is pinned to a specific Hugging Face revision for reproducibility (see `backend/app/services/turkish_ner.py`).
+
 **Frontend**
 
 ```

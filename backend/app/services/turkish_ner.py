@@ -9,6 +9,12 @@ from transformers import (
 
 MODEL_NAME = "akdeniz27/bert-base-turkish-cased-ner"
 
+# Pinned so the exact model weights this app loads never silently
+# change out from under it. Verified against the live Hugging Face Hub
+# (huggingface_hub.model_info(MODEL_NAME).sha) and confirmed to match
+# this repo id's current main-branch commit at the time of pinning.
+MODEL_REVISION = "99995f7d2be4b3a28c74f0d36ee97f8c04ee0571"
+
 
 ENTITY_TYPE_MAP = {
     "PER": "PERSON",
@@ -20,11 +26,13 @@ ENTITY_TYPE_MAP = {
 @lru_cache(maxsize=1)
 def get_ner_pipeline():
     tokenizer = AutoTokenizer.from_pretrained(
-        MODEL_NAME
+        MODEL_NAME,
+        revision=MODEL_REVISION,
     )
 
     model = AutoModelForTokenClassification.from_pretrained(
-        MODEL_NAME
+        MODEL_NAME,
+        revision=MODEL_REVISION,
     )
 
     return pipeline(
