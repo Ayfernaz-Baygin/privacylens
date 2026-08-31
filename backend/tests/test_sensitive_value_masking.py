@@ -40,16 +40,6 @@ def test_masks_organization_per_word():
             "0 ***-***-**-*7",
         ),
         (
-            "IBAN",
-            "TR330006100519786457841326",
-            "T************************6",
-        ),
-        (
-            "IBAN",
-            "TR33 0006 1005 1978 6457 8413 26",
-            "T*** **** **** **** **** **** *6",
-        ),
-        (
             "CARD_NUMBER",
             "4111-1111-1111-1111",
             "4***-****-****-***1",
@@ -62,6 +52,30 @@ def test_masks_identifier_types_and_preserves_separators(
     expected,
 ):
     assert mask_sensitive_value(value, finding_type) == expected
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (
+            "TR330006100519786457841326",
+            "TR***********************6",
+        ),
+        (
+            "TR33 0006 1005 1978 6457 8413 26",
+            "TR** **** **** **** **** **** *6",
+        ),
+        (
+            "tr330006100519786457841326",
+            "tr***********************6",
+        ),
+    ],
+)
+def test_masks_iban_preserves_country_code_and_last_digit(
+    value,
+    expected,
+):
+    assert mask_sensitive_value(value, "IBAN") == expected
 
 
 @pytest.mark.parametrize(

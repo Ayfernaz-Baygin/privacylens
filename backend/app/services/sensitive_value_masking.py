@@ -9,7 +9,6 @@ WORD_BASED_TYPES = {
 
 IDENTIFIER_TYPES = {
     "PHONE",
-    "IBAN",
     "CARD_NUMBER",
 }
 
@@ -39,6 +38,17 @@ def _mask_words(value: str) -> str:
     return re.sub(r"\S+", lambda match: _mask_short_part(match.group()), value)
 
 
+def _apply_alnum_mask(value: str, visible_indexes: set) -> str:
+    return "".join(
+        (
+            character
+            if not character.isalnum() or index in visible_indexes
+            else "*"
+        )
+        for index, character in enumerate(value)
+    )
+
+
 def _mask_alphanumeric(
     value: str,
     preserve_outer: bool,
@@ -57,14 +67,26 @@ def _mask_alphanumeric(
             meaningful_indexes[-1],
         }
 
-    return "".join(
-        (
-            character
-            if not character.isalnum() or index in visible_indexes
-            else "*"
-        )
+    return _apply_alnum_mask(value, visible_indexes)
+
+
+def _mask_iban(value: str) -> str:
+    meaningful_indexes = [
+        index
         for index, character in enumerate(value)
-    )
+        if character.isalnum()
+    ]
+
+    if len(meaningful_indexes) >= 3:
+        visible_indexes = {
+            meaningful_indexes[0],
+            meaningful_indexes[1],
+            meaningful_indexes[-1],
+        }
+    else:
+        visible_indexes = set(meaningful_indexes)
+
+    return _apply_alnum_mask(value, visible_indexes)
 
 
 def _is_valid_email_structure(value: str) -> bool:
@@ -119,6 +141,9 @@ def mask_sensitive_value(value: str, finding_type: str) -> str:
 
     if finding_type in WORD_BASED_TYPES:
         return _mask_words(value)
+
+    if finding_type == "IBAN":
+        return _mask_iban(value)
 
     if finding_type in IDENTIFIER_TYPES:
         return _mask_alphanumeric(value, preserve_outer=True)
