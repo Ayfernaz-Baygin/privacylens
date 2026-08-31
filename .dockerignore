@@ -1,0 +1,26 @@
+# Governs the backend build context (repo root, see compose.yaml).
+# Hugging Face model cache lives outside the repo entirely
+# (~/.cache/huggingface), so it can never end up in this context.
+
+.git
+.github
+
+.venv
+venv
+__pycache__
+**/__pycache__
+*.py[cod]
+.pytest_cache
+
+tmp
+
+.env
+.env.*
+!.env.example
+
+.vscode
+.idea
+*.log
+
+frontend/node_modules
+frontend/dist

@@ -1,0 +1,38 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      # Must match the frontend's host-published port below -- this is
+      # the Origin the browser sends when the Dockerized frontend calls
+      # the Dockerized backend. Uses the existing config system
+      # (PRIVACYLENS_CORS_ORIGINS), not a code change.
+      PRIVACYLENS_CORS_ORIGINS: http://localhost:8080
+    volumes:
+      # Turkish NER model weights (~400MB) persist here across
+      # container recreation so they aren't re-downloaded from Hugging
+      # Face on every `compose up`. Not fetched at build time or
+      # startup -- only on first real NER use (lazy-loaded, see
+      # turkish_ner.get_ner_pipeline).
+      - huggingface-cache:/root/.cache/huggingface
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Browser-facing URL (see frontend/Dockerfile) -- localhost,
+        # matching the backend port mapping above, not the
+        # backend service's Compose-internal hostname.
+        VITE_API_BASE_URL: http://localhost:8000
+    ports:
+      # 8080, not 5173, so this doesn't collide with `npm run dev`
+      # running at the same time.
+      - "8080:80"
+    depends_on:
+      - backend
+
+volumes:
+  huggingface-cache:

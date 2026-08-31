@@ -145,6 +145,17 @@ npm install
 npm run dev
 ```
 
+### Docker (optional)
+
+```
+docker compose up --build
+```
+
+- Backend: [http://localhost:8000](http://localhost:8000)
+- Frontend: [http://localhost:8080](http://localhost:8080)
+
+Uses `compose.yaml` at the repo root; the native `python`/`uvicorn` and `npm run dev` workflows above still work independently of this. The frontend's port is 8080 (not 5173) so it doesn't collide with `npm run dev` running at the same time. The Turkish NER model is not downloaded at build time — only on first real analysis request, and is cached in a named volume across container restarts.
+
 ### Configuration (optional)
 
 All configuration is optional; unset environment variables keep the exact defaults above, so the commands work with no setup.

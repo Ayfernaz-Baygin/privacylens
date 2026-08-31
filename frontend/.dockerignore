@@ -1,0 +1,12 @@
+# Governs the frontend build context (frontend/, see compose.yaml).
+
+node_modules
+dist
+
+.env
+.env.*
+!.env.example
+
+*.log
+.vscode
+.idea
