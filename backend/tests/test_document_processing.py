@@ -8,6 +8,7 @@ from backend.app.services.document_processing import (
     UnsupportedDocumentFormatError,
     analyze_document_file,
     build_finding_id,
+    locate_finding_in_hybrid_regions,
     locate_finding_in_ocr_regions,
 )
 from backend.app.services.pdf_parser import PdfOcrError
@@ -158,6 +159,196 @@ def test_ocr_finding_can_span_multiple_regions():
     ]
 
 
+def test_hybrid_native_region_finding_gets_correct_bbox(
+    tmp_path, monkeypatch
+):
+    native_box = {"x0": 1, "y0": 2, "x1": 3, "y1": 4}
+    monkeypatch.setattr(
+        "backend.app.services.document_processing.locate_text_in_pdf",
+        lambda **kwargs: pytest.fail(
+            "hybrid page must not use the native PDF locator"
+        ),
+    )
+
+    result = _mock_pdf_analysis(
+        tmp_path,
+        monkeypatch,
+        pages=[
+            {
+                "page_number": 1,
+                "text": "native@example.com\n|\nocr@example.com",
+                "text_source": "hybrid",
+                "regions": [
+                    {
+                        "start": 0,
+                        "end": 18,
+                        "text": "native@example.com",
+                        "source": "native",
+                        "bbox": native_box,
+                    },
+                    {
+                        "start": 21,
+                        "end": 36,
+                        "text": "ocr@example.com",
+                        "source": "ocr",
+                        "bbox": {
+                            "x0": 10,
+                            "y0": 20,
+                            "x1": 30,
+                            "y1": 40,
+                        },
+                    },
+                ],
+            }
+        ],
+        findings_by_text={
+            "native@example.com\n|\nocr@example.com": [
+                {
+                    "type": "EMAIL",
+                    "value": "native@example.com",
+                    "start": 0,
+                    "end": 18,
+                }
+            ]
+        },
+    )
+
+    assert result["findings"][0]["bounding_boxes"] == [native_box]
+
+
+def test_hybrid_ocr_region_finding_gets_correct_bbox(
+    tmp_path, monkeypatch
+):
+    ocr_box = {"x0": 10, "y0": 20, "x1": 30, "y1": 40}
+    monkeypatch.setattr(
+        "backend.app.services.document_processing.locate_text_in_pdf",
+        lambda **kwargs: pytest.fail(
+            "hybrid page must not use the native PDF locator"
+        ),
+    )
+
+    result = _mock_pdf_analysis(
+        tmp_path,
+        monkeypatch,
+        pages=[
+            {
+                "page_number": 1,
+                "text": "Header\n|\nocr@example.com",
+                "text_source": "hybrid",
+                "regions": [
+                    {
+                        "start": 0,
+                        "end": 6,
+                        "text": "Header",
+                        "source": "native",
+                        "bbox": {
+                            "x0": 1,
+                            "y0": 2,
+                            "x1": 3,
+                            "y1": 4,
+                        },
+                    },
+                    {
+                        "start": 9,
+                        "end": 24,
+                        "text": "ocr@example.com",
+                        "source": "ocr",
+                        "bbox": ocr_box,
+                    },
+                ],
+            }
+        ],
+        findings_by_text={
+            "Header\n|\nocr@example.com": [
+                {
+                    "type": "EMAIL",
+                    "value": "ocr@example.com",
+                    "start": 9,
+                    "end": 24,
+                }
+            ]
+        },
+    )
+
+    assert result["findings"][0]["bounding_boxes"] == [ocr_box]
+
+
+def test_hybrid_finding_can_span_native_and_ocr_regions():
+    boxes = locate_finding_in_hybrid_regions(
+        finding={"start": 3, "end": 12},
+        regions=[
+            {
+                "start": 0,
+                "end": 5,
+                "source": "native",
+                "bbox": {"x0": 1, "y0": 2, "x1": 3, "y1": 4},
+            },
+            {
+                "start": 5,
+                "end": 12,
+                "source": "ocr",
+                "bbox": {"x0": 5, "y0": 6, "x1": 7, "y1": 8},
+            },
+        ],
+    )
+
+    assert boxes == [
+        {"x0": 1, "y0": 2, "x1": 3, "y1": 4},
+        {"x0": 5, "y0": 6, "x1": 7, "y1": 8},
+    ]
+
+
+def test_hybrid_mapping_deduplicates_identical_bboxes():
+    duplicate_box = {"x0": 1, "y0": 2, "x1": 3, "y1": 4}
+
+    boxes = locate_finding_in_hybrid_regions(
+        finding={"start": 0, "end": 10},
+        regions=[
+            {
+                "start": 0,
+                "end": 5,
+                "source": "native",
+                "bbox": duplicate_box,
+            },
+            {
+                "start": 5,
+                "end": 10,
+                "source": "ocr",
+                "bbox": duplicate_box,
+            },
+        ],
+    )
+
+    assert boxes == [duplicate_box]
+
+
+def test_hybrid_repeated_text_only_maps_finding_occurrence():
+    first_box = {"x0": 1, "y0": 2, "x1": 3, "y1": 4}
+    second_box = {"x0": 5, "y0": 6, "x1": 7, "y1": 8}
+
+    boxes = locate_finding_in_hybrid_regions(
+        finding={"start": 20, "end": 36},
+        regions=[
+            {
+                "start": 0,
+                "end": 16,
+                "text": "test@example.com",
+                "source": "native",
+                "bbox": first_box,
+            },
+            {
+                "start": 20,
+                "end": 36,
+                "text": "test@example.com",
+                "source": "ocr",
+                "bbox": second_box,
+            },
+        ],
+    )
+
+    assert boxes == [second_box]
+
+
 def test_native_pdf_still_uses_pdf_locator(tmp_path, monkeypatch):
     calls = []
     expected_box = {"x0": 1, "y0": 2, "x1": 3, "y1": 4}
@@ -194,11 +385,12 @@ def test_native_pdf_still_uses_pdf_locator(tmp_path, monkeypatch):
     assert calls[0]["value"] == "test@example.com"
 
 
-def test_mixed_pdf_uses_native_locator_and_ocr_regions(
+def test_mixed_pdf_uses_native_ocr_and_hybrid_mapping(
     tmp_path, monkeypatch
 ):
     native_box = {"x0": 1, "y0": 2, "x1": 3, "y1": 4}
     ocr_box = {"x0": 10, "y0": 20, "x1": 30, "y1": 40}
+    hybrid_box = {"x0": 50, "y0": 60, "x1": 70, "y1": 80}
     locator_pages = []
     monkeypatch.setattr(
         "backend.app.services.document_processing.locate_text_in_pdf",
@@ -230,6 +422,20 @@ def test_mixed_pdf_uses_native_locator_and_ocr_regions(
                     }
                 ],
             },
+            {
+                "page_number": 3,
+                "text": "hybrid@example.com",
+                "text_source": "hybrid",
+                "regions": [
+                    {
+                        "start": 0,
+                        "end": 18,
+                        "text": "hybrid@example.com",
+                        "source": "ocr",
+                        "bbox": hybrid_box,
+                    }
+                ],
+            },
         ],
         findings_by_text={
             "native@example.com": [
@@ -248,12 +454,21 @@ def test_mixed_pdf_uses_native_locator_and_ocr_regions(
                     "end": 15,
                 }
             ],
+            "hybrid@example.com": [
+                {
+                    "type": "EMAIL",
+                    "value": "hybrid@example.com",
+                    "start": 0,
+                    "end": 18,
+                }
+            ],
         },
     )
 
     assert locator_pages == [1]
     assert result["findings"][0]["bounding_boxes"] == [native_box]
     assert result["findings"][1]["bounding_boxes"] == [ocr_box]
+    assert result["findings"][2]["bounding_boxes"] == [hybrid_box]
 
 
 def test_analyze_document_file_uses_pdf_and_locates_boxes(

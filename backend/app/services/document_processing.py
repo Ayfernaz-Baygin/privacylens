@@ -53,6 +53,39 @@ def locate_finding_in_ocr_regions(
     ]
 
 
+def locate_finding_in_hybrid_regions(
+    finding: dict,
+    regions: list[dict],
+) -> list[dict]:
+    finding_start = finding["start"]
+    finding_end = finding["end"]
+    bounding_boxes = []
+    seen_coordinates = set()
+
+    for region in regions:
+        if not (
+            region["start"] < finding_end
+            and region["end"] > finding_start
+        ):
+            continue
+
+        bbox = region["bbox"]
+        coordinates = (
+            bbox["x0"],
+            bbox["y0"],
+            bbox["x1"],
+            bbox["y1"],
+        )
+
+        if coordinates in seen_coordinates:
+            continue
+
+        seen_coordinates.add(coordinates)
+        bounding_boxes.append(bbox.copy())
+
+    return bounding_boxes
+
+
 def analyze_document_file(
     pdf_path: Path,
     docx_path: Path,
@@ -63,9 +96,9 @@ def analyze_document_file(
     bounding_boxes and finding_id already attached.
 
     Native PDF findings get real bounding_boxes via locate_text_in_pdf;
-    OCR PDF findings use the parser's offset-based regions. DOCX and
-    XLSX have no page/coordinate concept yet, so their findings get
-    bounding_boxes=[]. For XLSX, each sheet is treated as one "page"
+    OCR and hybrid PDF findings use the parser's offset-based regions.
+    DOCX and XLSX have no page/coordinate concept yet, so their findings
+    get bounding_boxes=[]. For XLSX, each sheet is treated as one "page"
     (the parser already numbers page_number by sheet order and sets
     page_count to the sheet count), so detection and finding_id run per
     sheet exactly like they run per PDF page.
@@ -116,9 +149,18 @@ def analyze_document_file(
 
         for finding in page_findings:
             if document_format == "pdf":
-                if page.get("text_source", "native") == "ocr":
+                text_source = page.get("text_source", "native")
+
+                if text_source == "ocr":
                     finding["bounding_boxes"] = (
                         locate_finding_in_ocr_regions(
+                            finding=finding,
+                            regions=page.get("regions", []),
+                        )
+                    )
+                elif text_source == "hybrid":
+                    finding["bounding_boxes"] = (
+                        locate_finding_in_hybrid_regions(
                             finding=finding,
                             regions=page.get("regions", []),
                         )
